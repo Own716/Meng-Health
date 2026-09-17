@@ -39,7 +39,7 @@ export const MealCards: React.FC<MealCardsProps> = ({
                 <span className="font-bold text-sm text-slate-900">{title}</span>
                 {hasItems && (
                   <span className="text-xs text-slate-400 font-medium">
-                    {meal.totalCalories} 千卡
+                    {meal.totalCalories} 大卡
                   </span>
                 )}
               </div>
@@ -57,7 +57,7 @@ export const MealCards: React.FC<MealCardsProps> = ({
                           {item.name}
                         </div>
                         <div className="text-[10px] text-slate-400">
-                          {item.grams}g · {item.calories}千卡
+                          {item.grams}g · {item.calories}大卡
                         </div>
                       </div>
                       <button
@@ -83,7 +83,7 @@ export const MealCards: React.FC<MealCardsProps> = ({
             {/* 底部热量统计与快捷添加/拍照按钮 */}
             <div className="flex items-center justify-between pt-2 border-t border-slate-50 mt-auto">
               <span className="text-xs font-semibold text-slate-700">
-                {hasItems ? `${meal.totalCalories} 千卡` : '0 千卡'}
+                {hasItems ? `${meal.totalCalories} 大卡` : '0 大卡'}
               </span>
               <div className="flex items-center gap-1.5">
                 {onCameraFood && (

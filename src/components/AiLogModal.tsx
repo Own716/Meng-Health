@@ -89,6 +89,36 @@ export const AiLogModal: React.FC<AiLogModalProps> = ({
     }
   };
 
+  // 增减单个食物克重并动态等比换算热量与三大营养素 (确定性缩放)
+  const handleUpdateGrams = (index: number, newGrams: number) => {
+    if (newGrams <= 0 || !aiResults) return;
+    setAiResults(prev => {
+      if (!prev) return null;
+      return prev.map((item, idx) => {
+        if (idx !== index) return item;
+        const oldGrams = item.estimatedGrams || 100;
+        const ratio = newGrams / oldGrams;
+        return {
+          ...item,
+          estimatedGrams: Math.round(newGrams),
+          calories: Math.round(item.calories * ratio),
+          protein: Math.round(item.protein * ratio * 10) / 10,
+          carbs: Math.round(item.carbs * ratio * 10) / 10,
+          fat: Math.round(item.fat * ratio * 10) / 10,
+        };
+      });
+    });
+  };
+
+  // 移除单个识别结果项
+  const handleDeleteResultItem = (index: number) => {
+    setAiResults(prev => {
+      if (!prev) return null;
+      const next = prev.filter((_, idx) => idx !== index);
+      return next.length > 0 ? next : null;
+    });
+  };
+
   // 确认加入对应餐次
   const handleConfirmAdd = () => {
     if (!aiResults || aiResults.length === 0) return;
@@ -100,7 +130,12 @@ export const AiLogModal: React.FC<AiLogModalProps> = ({
       protein: item.protein,
       carbs: item.carbs,
       fat: item.fat,
-      note: item.reasoning
+      note: item.reasoning,
+      brand: item.brand,
+      confidence: item.confidence,
+      verified: item.verified,
+      evidence: item.evidence,
+      foodDissection: item.foodDissection
     }));
 
     onAddAiFood(targetMeal, foodsToAdd);
@@ -301,16 +336,99 @@ export const AiLogModal: React.FC<AiLogModalProps> = ({
             </div>
 
             {aiResults.map((item, idx) => (
-              <div key={idx} className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
-                <div className="flex justify-between items-baseline mb-1">
-                  <span className="text-sm font-bold text-slate-800">{item.foodName}</span>
-                  <span className="text-xs font-black text-blue-600">{item.calories} 千卡</span>
+              <div key={idx} className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm space-y-2.5">
+                <div className="flex justify-between items-start">
+                  <div className="flex-1 pr-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-sm font-bold text-slate-800">{item.foodName}</span>
+                      {item.brand && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 font-semibold border border-purple-200/60">
+                          {item.brand}
+                        </span>
+                      )}
+                      {item.verified && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200/60 flex items-center gap-0.5">
+                          <Check size={10} /> 权威核验
+                        </span>
+                      )}
+                      {item.evidence && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 font-semibold border border-sky-200/60">
+                          {item.evidence.sourceTitle}
+                        </span>
+                      )}
+                      {item.confidence && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                          item.confidence === 'high'
+                            ? 'bg-emerald-50 text-emerald-600'
+                            : item.confidence === 'low'
+                            ? 'bg-amber-50 text-amber-600'
+                            : 'bg-slate-100 text-slate-600'
+                        }`}>
+                          置信度: {item.confidence === 'high' ? '高' : item.confidence === 'low' ? '低' : '中'}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* 菜品/食材拆解溯源展示 (如馒头夹菜：主料馒头 + 配料炒菜，杜绝混淆为汉堡) */}
+                    {item.foodDissection && (
+                      <div className="text-[11px] text-slate-500 mt-1.5 bg-slate-50 p-2.5 rounded-xl space-y-1 border border-slate-100">
+                        <div>
+                          <span className="font-semibold text-slate-700">主料主食：</span>
+                          {item.foodDissection.mainIngredients.join('、')}
+                        </div>
+                        {item.foodDissection.seasoningsAndOil && item.foodDissection.seasoningsAndOil.length > 0 && (
+                          <div>
+                            <span className="font-semibold text-slate-700">夹心/配菜与用油：</span>
+                            {item.foodDissection.seasoningsAndOil.join('、')}
+                          </div>
+                        )}
+                        <div className="text-[10px] text-slate-400">
+                          测算基准：{item.foodDissection.estimationMethod}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="text-right flex items-center gap-2">
+                    <span className="text-xs font-black text-blue-600">{item.calories} 大卡</span>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteResultItem(idx)}
+                      className="p-1 rounded-lg text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-colors"
+                      title="移除此项"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 </div>
-                <div className="text-[11px] text-slate-400 mb-2">
-                  预估重量: {item.estimatedGrams}g · 蛋白质 {item.protein}g · 碳水 {item.carbs}g · 脂肪 {item.fat}g
+
+                {/* 重量克数调节与三大营养素明细 (四则运算确定性缩放) */}
+                <div className="pt-2 border-t border-slate-50 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-slate-500 font-medium">分量:</span>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateGrams(idx, Math.max(10, item.estimatedGrams - 20))}
+                      className="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold flex items-center justify-center transition-colors"
+                    >
+                      -
+                    </button>
+                    <span className="font-bold text-slate-800 w-10 text-center">{item.estimatedGrams}g</span>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateGrams(idx, item.estimatedGrams + 20)}
+                      className="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold flex items-center justify-center transition-colors"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <div className="text-[11px] text-slate-400">
+                    蛋 {item.protein}g · 碳 {item.carbs}g · 脂 {item.fat}g
+                  </div>
                 </div>
+
                 {item.reasoning && (
-                  <div className="text-[10px] text-slate-500 bg-slate-50 p-2 rounded-lg leading-relaxed">
+                  <div className="text-[10px] text-slate-500 bg-sky-50/50 p-2 rounded-xl leading-relaxed">
                     💡 营养师简评: {item.reasoning}
                   </div>
                 )}

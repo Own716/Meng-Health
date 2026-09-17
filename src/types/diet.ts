@@ -1,14 +1,22 @@
+import { NutritionEvidence } from './nutrition';
+
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
 export interface FoodItem {
   id: string;
   name: string;
   grams: number;
-  calories: number; // kcal
+  calories: number; // 大卡 (kcal)
   protein: number;  // g
   carbs: number;    // g
   fat: number;      // g
   note?: string;
+  brand?: string;
+  category?: string;
+  evidence?: NutritionEvidence;
+  confidence?: 'high' | 'medium' | 'low';
+  verified?: boolean;
+  sourceCheckedAt?: string;
 }
 
 export interface MealLog {
@@ -40,10 +48,14 @@ export interface UserProfile {
   height: number; // cm
   currentWeight: number; // kg
   targetWeight: number;  // kg
-  dailyBudget: number;   // kcal
+  dailyBudget: number;   // 大卡
   targetProtein: number; // g
   targetCarbs: number;   // g
   targetFat: number;     // g
+  activityLevel?: 'sedentary' | 'light' | 'moderate' | 'heavy';
+  durationDays?: number; // 期望减脂周期天数
+  goalType?: 'lose_weight' | 'maintain' | 'gain_muscle';
+  dietPreference?: string;
 }
 
 export interface BackupData {
@@ -51,4 +63,5 @@ export interface BackupData {
   exportTime: string;
   userProfile: UserProfile;
   history: Record<string, DayLog>; // key: YYYY-MM-DD
+  customFoods?: FoodItem[];
 }

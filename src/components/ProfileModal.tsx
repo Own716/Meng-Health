@@ -29,6 +29,18 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
 
   const [savedTip, setSavedTip] = useState(false);
 
+  // 弹窗打开时同步最新的 profile 数据
+  React.useEffect(() => {
+    if (isOpen) {
+      if (profile.nickname) setNickname(profile.nickname);
+      if (profile.gender) setGender(profile.gender);
+      if (profile.age) setAge(String(profile.age));
+      if (profile.height) setHeight(String(profile.height));
+      if (profile.currentWeight) setCurrentWeight(String(profile.currentWeight));
+      if (profile.targetWeight) setTargetWeight(String(profile.targetWeight));
+    }
+  }, [isOpen, profile]);
+
   // 科学推导推荐摄入量 (Mifflin-St Jeor 基础代谢 + TDEE 轻活动 - 500kcal 减脂缺口)
   const calcHeight = parseFloat(height) || 165;
   const calcWeight = parseFloat(currentWeight) || 58;
@@ -230,7 +242,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             <div className="bg-white p-3 rounded-xl border border-sky-100 shadow-sm flex items-center justify-between">
               <div>
                 <span className="text-[11px] text-slate-400 block">建议今日最多摄入</span>
-                <span className="text-xl font-black text-blue-600">{autoDailyBudget} <span className="text-xs font-semibold text-slate-500">千卡</span></span>
+                <span className="text-xl font-black text-blue-600">{autoDailyBudget} <span className="text-xs font-semibold text-slate-500">大卡</span></span>
               </div>
               <div className="text-right text-[11px] text-slate-500 space-y-0.5">
                 <div>蛋白质 <strong>{autoProtein}g</strong></div>

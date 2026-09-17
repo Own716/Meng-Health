@@ -1,13 +1,25 @@
-import { FoodItem } from '../types/diet';
+import { FoodItem, UserProfile } from '../types/diet';
+import { NutritionEvidence, FoodDissection } from '../types/nutrition';
+import { searchFoodNutritionEvidence } from './searchService';
+import { queryAuthoritativeFood } from './authoritativeFoodDb';
+import { scaleNutritionByGrams } from './nutritionCalculator';
+import { CaloriePlanResult } from './calorieCalculator';
 
 export interface AiFoodResult {
   foodName: string;
+  brand?: string;
+  category?: string;
   estimatedGrams: number;
-  calories: number;
+  calories: number; // 大卡
   protein: number;
   carbs: number;
   fat: number;
   reasoning: string;
+  per100gCalories?: number;
+  evidence?: NutritionEvidence;
+  confidence?: 'high' | 'medium' | 'low';
+  verified?: boolean;
+  foodDissection?: FoodDissection;
 }
 
 export interface AiConfig {
@@ -255,111 +267,40 @@ export async function identifyFood(input: {
     }
   }
 
-  // 3. 未配置 API Key 时的备用规则引擎（体验模式）
-  await new Promise(r => setTimeout(r, 800));
-
+  // 3. 未配置 API Key 时的处理：
+  // 严格杜绝在未配置 Key 时使用固定假数据冒充真实 AI
   const desc = (input.textDescription || '').trim();
-
-  if (desc.includes('牛肉') || desc.includes('面')) {
-    return [
-      {
-        foodName: '经典牛肉拉面 (含牛肉切片)',
-        estimatedGrams: 450,
-        calories: 520,
-        protein: 28,
-        carbs: 72,
-        fat: 14,
-        reasoning: 'AI 营养师分析：拉面面条约 250g，酱牛肉约 70g，富含碳水化合物与优质蛋白'
-      }
-    ];
-  }
-
-  if (desc.includes('沙拉') || desc.includes('鸡胸')) {
-    return [
-      {
-        foodName: '香煎鸡胸肉牛油果沙拉',
-        estimatedGrams: 320,
-        calories: 360,
-        protein: 38,
-        carbs: 18,
-        fat: 12,
-        reasoning: '高蛋白低脂健康减脂餐，微量油醋汁，极佳的减重供能配比'
-      }
-    ];
-  }
-
-  if (desc.includes('鸡蛋') || desc.includes('蛋')) {
-    return [
-      {
-        foodName: '水煮鸡蛋 (1颗)',
-        estimatedGrams: 60,
-        calories: 86,
-        protein: 7.5,
-        carbs: 0.8,
-        fat: 5.5,
-        reasoning: '高生物价优质蛋白质来源，饱腹感强'
-      }
-    ];
-  }
-
-  if (desc.includes('米饭') || desc.includes('饭')) {
-    return [
-      {
-        foodName: '蒸熟白米饭 (约大半碗)',
-        estimatedGrams: 150,
-        calories: 174,
-        protein: 4,
-        carbs: 38,
-        fat: 0.5,
-        reasoning: '优质复合碳水化合物主食，建议减脂期搭配蔬菜与高蛋白肉类'
-      }
-    ];
-  }
-
-  if (desc.includes('奶茶')) {
-    return [
-      {
-        foodName: '现调奶茶 (中杯标准甜)',
-        estimatedGrams: 500,
-        calories: 360,
-        protein: 4,
-        carbs: 58,
-        fat: 12,
-        reasoning: '含糖饮品与奶基底，碳水及糖分较高，减脂期建议选择不另外加糖或鲜奶茶'
-      }
-    ];
-  }
-
-  // 如果仅上传了图片未配置 Key
-  if (processedImages.length > 0 && !desc) {
-    return [
-      {
-        foodName: '美味轻食组合餐',
-        estimatedGrams: 350,
-        calories: 420,
-        protein: 30,
-        carbs: 45,
-        fat: 12,
-        reasoning: '【体验模式】未配置 API Key 时自动启用估算。在设置中填入智谱 GLM-4V API Key 即可享受真实大模型视觉识别！'
-      }
-    ];
-  }
-
   if (desc) {
-    return [
-      {
-        foodName: desc,
-        estimatedGrams: 200,
-        calories: 260,
-        protein: 15,
-        carbs: 35,
-        fat: 6,
-        reasoning: `基于您的描述“${desc}”估算出的日常均值营养成分`
-      }
-    ];
+    // 允许通过权威中国食物成分库纯文字查询已知食物
+    const authMatch = queryAuthoritativeFood(desc);
+    if (authMatch) {
+      const factor = authMatch.standardServingGrams / 100;
+      return [
+        {
+          foodName: authMatch.name,
+          brand: authMatch.brand,
+          category: authMatch.category,
+          estimatedGrams: authMatch.standardServingGrams,
+          calories: Math.round(authMatch.per100g.calories * factor),
+          protein: Math.round(authMatch.per100g.protein * factor * 10) / 10,
+          carbs: Math.round(authMatch.per100g.carbs * factor * 10) / 10,
+          fat: Math.round(authMatch.per100g.fat * factor * 10) / 10,
+          reasoning: `《中国食物成分表》权威基准数据核验 (${authMatch.source})`,
+          confidence: 'high',
+          evidence: {
+            sourceType: authMatch.isPackaged ? 'package_ocr' : 'authoritative_db',
+            sourceTitle: `${authMatch.name} 标准成分`,
+            sourceDate: new Date().toISOString().split('T')[0],
+            sourceSnippet: `基准每100g含：${authMatch.per100g.calories}大卡，蛋白质${authMatch.per100g.protein}g，碳水${authMatch.per100g.carbs}g，脂肪${authMatch.per100g.fat}g`,
+            confidence: 'high',
+            verified: true
+          }
+        }
+      ];
+    }
   }
 
-  throw new Error('未输入饮食描述或未检测到清晰餐品照片');
+  throw new Error('未配置 AI 视觉大模型 API Key。请在「设置」中填入智谱 GLM-4V（永久免费）或其他大模型密钥后重试，或通过首页手动添加食物。');
 }
 
 /**
@@ -372,24 +313,39 @@ async function callRealAiApi(
   const images = input.imageBase64List || (input.imageBase64 ? [input.imageBase64] : []);
 
   const prompt = `你是一位精通中国饮食文化、各类中西家常菜、外卖快餐、带包装零食及现制茶饮的资深临床营养师与减脂教练。
-请仔细识别分析用户上传的一张或多张食物照片及文字描述，识别出所有的菜品、食材、零食、水果与饮品，精确估算克数(g)、热量(千卡/kcal)、蛋白质(克)、碳水化合物(克)、脂肪(克)。
+请仔细识别分析用户上传的一张或多张食物照片及文字描述，识别出所有的菜品、食材、零食、水果与饮品，精确估算克数(g)、热量(大卡/kcal)、蛋白质(克)、碳水化合物(克)、脂肪(克)。
+
+【极重要：中式传统蒸制发面面食 vs 西式烘烤面点辨析准则】：
+- 严禁将「馒头夹菜 / 馒头夹肉 / 烧饼夹菜 / 烧饼夹肉 / 白吉馍 / 肉夹馍 / 煎饼果子」误判为西式汉堡 (Hamburger) 或三明治！
+- 判别标准：
+  1. 馒头夹菜：外层为蒸熟的白面馒头（表面白嫩、光滑细腻、无芝麻与烘烤焦黄碎屑），中间夹家常热炒菜（如青椒土豆丝、青椒炒蛋、咸菜、肉沫等）。必须精准识别命名为「馒头夹菜」！基准热量：1个标准白馒头约110g(245大卡) + 夹菜约90g(100大卡) = 约345大卡。
+  2. 肉夹馍：白吉馍或千层饼烤制夹卤猪肉碎，命名为「肉夹馍」。
+  3. 西式汉堡：必须是由烘烤面包坯配牛肉饼/炸鸡排与沙拉酱。如果外层是蒸熟白馍，绝不能判断为汉堡！
+- 凡是发面馒头夹炒菜，一律识别为「馒头夹菜」，绝不输出为汉堡！
+
+【包装食品与 OCR 识别模式】：
+- 拍到食品包装、饮料瓶、奶盒、零食袋时，优先通过 OCR 读取：品牌名称、产品名称、净含量规格(g/ml)以及包装上的营养成分表(每100g能量kJ换算为大卡、蛋白质、脂肪、碳水化合物、钠)。
+- 必须统一使用“大卡”(kcal)为热量单位（1大卡 ≈ 4.184 kJ）。
+
+【餐桌一桌多菜拆分】：
+- 若照片中包含多道菜品或主食（例如米饭、炒鸡蛋、红烧肉、青菜、汤），必须逐个拆分为独立的数组元素，每个菜独立给出克重、大卡、蛋白质、碳水和脂肪，严禁合并成一个笼统的“中式套餐”。
 
 【常见中式外卖与餐盒规格参考】：
-- 标准长方形/圆形外卖塑料餐盒：装满米饭约 250-300g (约 300-350kcal)；单份炒菜净重通常在 250-350g；
-- 食堂标准不锈钢餐盘：单个菜格约 100-150g；普通家用中碗米饭约 150g (174kcal)。
+- 标准长方形/圆形外卖塑料餐盒：装满米饭约 250-300g (约 290-350大卡)；单份炒菜净重通常在 250-350g；
+- 食堂标准不锈钢餐盘：单个菜格约 100-150g；普通家用中碗米饭约 150g (174大卡)。
 
 【现制奶茶与饮品规格参考 (蜜雪冰城/喜茶/茶百道/霸王茶姬等)】：
-- 中杯(约 500ml)：全糖普通奶茶约 360-450kcal，半糖约 260-320kcal，微糖/不另外加糖鲜奶茶约 180-220kcal；
-- 大杯(约 650-700ml)：全糖奶茶约 500-620kcal；
-- 常见加料热量：黑糖波霸珍珠一份(+110-130kcal)，芝士奶盖一份(+150-180kcal)，椰果/仙草一份(+40-50kcal)；
-- 经典果茶饮品：蜜雪冰城冰鲜柠檬水(大杯)约 150-180kcal。
+- 中杯(约 500ml)：全糖普通奶茶约 360-450大卡，半糖约 260-320大卡，微糖/不另外加糖鲜奶茶约 180-220大卡；
+- 大杯(约 650-700ml)：全糖奶茶约 500-620大卡；
+- 常见加料热量：黑糖波霸珍珠一份(+110-130大卡)，芝士奶盖一份(+150-180大卡)，椰果/仙草一份(+40-50大卡)；
+- 经典果茶饮品：蜜雪冰城冰鲜柠檬水(大杯)约 150-180大卡。
 
 【常见带包装零食净含量与热量参考】：
-- 包装薯片/膨化食品：标准中袋 70g (约 380-390kcal)，小袋 30g (约 160kcal)；
-- 辣条类（如卫龙）：标准包约 65g (约 260-280kcal)，小包约 30g；
-- 坚果/每日坚果：独立小袋装标准净含量通常为 25g (约 145-155kcal)；
-- 饼干类：奥利奥单小包(3片)约 29g (140kcal)；
-- 吐司面包：单片全麦吐司约 35-40g (80-95kcal)。
+- 包装薯片/膨化食品：标准中袋 70g (约 380-390大卡)，小袋 30g (约 160大卡)；
+- 辣条类（如卫龙）：标准包约 65g (约 240-280大卡)，小包约 30g；
+- 坚果/每日坚果：独立小袋装标准净含量通常为 25g (约 145-155大卡)；
+- 饼干类：奥利奥单小包(3片)约 29g (140大卡)；
+- 吐司面包：单片全麦吐司约 35-40g (80-95大卡)。
 
 要求：
 1. 如果图片中完全没有食物、画面全黑或无法分辨，请严格返回空数组 []。
@@ -397,12 +353,14 @@ async function callRealAiApi(
 3. 返回格式示例：
 [
   {
-    "foodName": "食物名称",
+    "foodName": "食物名称 (如: 馒头夹菜)",
+    "brand": "品牌 (如有)",
+    "category": "分类",
     "estimatedGrams": 200,
-    "calories": 300,
-    "protein": 25,
-    "carbs": 30,
-    "fat": 8,
+    "calories": 345,
+    "protein": 11,
+    "carbs": 57,
+    "fat": 9,
     "reasoning": "简要营养与热量分析"
   }
 ]
@@ -514,8 +472,8 @@ async function callRealAiApi(
 
     clearTimeout(timeoutId);
 
-    // 解析 JSON 结果（鲁棒提取）
-    return extractFoodResultsFromJson(resultText);
+    // 解析 JSON 结果并结合权威食品库与搜索进行证据挂载与程序计算
+    return await enrichFoodResults(resultText);
 
   } catch (err: any) {
     clearTimeout(timeoutId);
@@ -527,9 +485,9 @@ async function callRealAiApi(
 }
 
 /**
- * 鲁棒提取与格式化 AI 返回的 JSON 数组
+ * 鲁棒提取与格式化 AI 返回的 JSON 数组，并挂载权威证据链与程序精确计算
  */
-function extractFoodResultsFromJson(rawText: string): AiFoodResult[] {
+async function enrichFoodResults(rawText: string): Promise<AiFoodResult[]> {
   if (!rawText || !rawText.trim()) {
     throw new Error('AI 未返回任何数据，请重试');
   }
@@ -568,13 +526,115 @@ function extractFoodResultsFromJson(rawText: string): AiFoodResult[] {
     throw new Error('未在照片或描述中检测到有效食物，请重新拍摄清晰的食物照片。');
   }
 
-  return parsed.map((item: any) => ({
-    foodName: String(item.foodName || '未知食物'),
-    estimatedGrams: Math.round(Number(item.estimatedGrams) || 100),
-    calories: Math.round(Number(item.calories) || 150),
-    protein: Math.round(Number(item.protein) || 5),
-    carbs: Math.round(Number(item.carbs) || 20),
-    fat: Math.round(Number(item.fat) || 5),
-    reasoning: String(item.reasoning || '')
-  }));
+  const enrichedResults: AiFoodResult[] = [];
+
+  for (const item of parsed) {
+    const rawName = String(item.foodName || '未知食物');
+    const rawBrand = item.brand ? String(item.brand) : undefined;
+    const estimatedGrams = Math.max(1, Math.round(Number(item.estimatedGrams) || 100));
+
+    // 权威库交叉验证与基准对齐
+    const authMatch = queryAuthoritativeFood(rawName);
+    let calories = Math.round(Number(item.calories) || 150);
+    let protein = Math.round((Number(item.protein) || 5) * 10) / 10;
+    let carbs = Math.round((Number(item.carbs) || 20) * 10) / 10;
+    let fat = Math.round((Number(item.fat) || 5) * 10) / 10;
+    let confidence: 'high' | 'medium' | 'low' = 'medium';
+
+    if (authMatch) {
+      // 若匹配到权威库，优先使用确定性程序比例运算
+      const scaled = scaleNutritionByGrams(authMatch.per100g, estimatedGrams);
+      calories = scaled.calories;
+      protein = scaled.protein;
+      carbs = scaled.carbs;
+      fat = scaled.fat;
+      confidence = 'high';
+    }
+
+    // 检索或生成来源证据
+    const evidence = await searchFoodNutritionEvidence(rawName, rawBrand);
+    const verified = authMatch ? true : (Boolean(item.verified));
+    const foodDissection = authMatch?.foodDissection || item.foodDissection;
+
+    enrichedResults.push({
+      foodName: authMatch ? authMatch.name : rawName,
+      brand: rawBrand || authMatch?.brand,
+      category: item.category || authMatch?.category || '普通餐品',
+      estimatedGrams,
+      calories,
+      protein,
+      carbs,
+      fat,
+      reasoning: String(item.reasoning || ''),
+      evidence,
+      confidence,
+      verified,
+      foodDissection,
+    });
+  }
+
+  return enrichedResults;
+}
+
+/**
+ * 基于用户身体数据与计划结果，由真实 AI 生成专业的中文饮食教练指导
+ */
+export async function generateAiPlanCoaching(
+  profile: UserProfile,
+  plan: CaloriePlanResult
+): Promise<string> {
+  const config = getAiConfig();
+  if (!config.apiKey || config.apiKey.trim().length < 5) {
+    return `根据您的身材数据与 ${profile.durationDays || 60} 天减脂目标，每日建议最多摄入 ${plan.safeIntake} 大卡，维持约 ${plan.dailyDeficit} 大卡健康缺口。建议多吃优质蛋白（如蛋类、瘦肉、豆制品），控制精制主食与含糖饮料。`;
+  }
+
+  try {
+    const isGemini = config.baseUrl.includes('googleapis.com');
+    const prompt = `你是一位专业注册营养师与减脂健康教练。用户资料：
+- 昵称：${profile.nickname || '梦梦'}
+- 性别：${profile.gender === 'male' ? '男' : '女'}，年龄：${profile.age || 25}岁，身高：${profile.height || 165}cm
+- 当前体重：${profile.currentWeight || 58}kg，目标体重：${profile.targetWeight || 52}kg (需减重 ${plan.weightToLose}kg)
+- 规划周期：${profile.durationDays || 60}天，每周安全减重速度：约 ${plan.weeklyPaceKg}kg
+- 每日基础代谢(BMR)：${plan.bmr} 大卡，总消耗(TDEE)：${plan.tdee} 大卡
+- 规划每日摄入预算：${plan.safeIntake} 大卡 (缺口约 ${plan.dailyDeficit} 大卡)
+- 营养素建议：蛋白质 ${plan.proteinGrams}g，碳水 ${plan.carbsGrams}g，脂肪 ${plan.fatGrams}g
+
+请为该用户给出一段精炼、亲切、科学的中文减脂执行要点与饮食建议（150字以内，重点结合中餐饮食习惯，如米饭杂粮搭配、蛋白质来源与蔬菜摄入建议）。直接输出建议纯文本，不要带多余问候或免责声明。`;
+
+    if (isGemini) {
+      const url = `${config.baseUrl.replace(/\/+$/, '')}/v1beta/models/${config.model.trim()}:generateContent?key=${config.apiKey.trim()}`;
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+      });
+      if (resp.ok) {
+        const json = await resp.json();
+        return json.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+      }
+    } else {
+      const endpoint = config.baseUrl.endsWith('/chat/completions')
+        ? config.baseUrl
+        : `${config.baseUrl.replace(/\/+$/, '')}/chat/completions`;
+      const resp = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.apiKey.trim()}`
+        },
+        body: JSON.stringify({
+          model: 'glm-4-flash',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.3,
+          max_tokens: 300
+        })
+      });
+      if (resp.ok) {
+        const json = await resp.json();
+        return json.choices?.[0]?.message?.content?.trim() || '';
+      }
+    }
+  } catch {}
+
+  return `根据您的身材数据与 ${profile.durationDays || 60} 天减脂目标，每日建议最多摄入 ${plan.safeIntake} 大卡，维持约 ${plan.dailyDeficit} 大卡健康缺口。建议多吃优质蛋白（如蛋类、瘦肉、豆制品），控制精制主食与含糖饮料。`;
 }

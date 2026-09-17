@@ -71,7 +71,7 @@ export const CalorieRing: React.FC<CalorieRingProps> = ({
             <span className="text-4xl font-black text-slate-900 tracking-tight">
               {remaining}
             </span>
-            <span className="text-xs font-bold text-slate-500">千卡</span>
+            <span className="text-xs font-bold text-slate-500">大卡</span>
           </div>
           <span className="text-xs font-semibold text-slate-400 mt-1">
             今日剩余可吃
@@ -82,11 +82,11 @@ export const CalorieRing: React.FC<CalorieRingProps> = ({
       {/* 圆环正下方的辅助信息卡片：今日最多摄入量与今日已摄入 */}
       <div className="flex items-center justify-center gap-4 mt-2 px-4 py-1.5 rounded-full bg-slate-100/90 text-xs font-semibold text-slate-700 shadow-sm border border-slate-200/50">
         <div>
-          今日最多摄入量: <span className="font-black text-slate-900">{budget}</span> 千卡
+          今日最多摄入量: <span className="font-black text-slate-900">{budget}</span> 大卡
         </div>
         <div className="w-[1px] h-3.5 bg-slate-300" />
         <div>
-          今日已摄入: <span className="font-black text-blue-600">{consumed}</span> 千卡
+          今日已摄入: <span className="font-black text-blue-600">{consumed}</span> 大卡
         </div>
       </div>
     </div>

@@ -47,9 +47,9 @@ export const JournalView: React.FC<JournalViewProps> = ({ onSelectDate }) => {
                   )}
                 </div>
                 <div className="text-xs text-slate-400">
-                  摄入 <span className="font-semibold text-slate-700">{log.consumedCalories}</span> / 预算 {log.budgetCalories} 千卡
+                  摄入 <span className="font-semibold text-slate-700">{log.consumedCalories}</span> / 预算 {log.budgetCalories} 大卡
                   · 差额 <span className={`font-bold ${isSuccess ? 'text-emerald-600' : 'text-rose-500'}`}>
-                    {deficit > 0 ? `-${deficit}` : `+${Math.abs(deficit)}`} 千卡
+                    {deficit > 0 ? `-${deficit}` : `+${Math.abs(deficit)}`} 大卡
                   </span>
                 </div>
               </div>

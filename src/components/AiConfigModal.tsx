@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { X, Key, Check, Zap, HelpCircle, ExternalLink, ShieldCheck, AlertCircle, Loader2 } from 'lucide-react';
+import { X, Key, Check, Zap, HelpCircle, ExternalLink, ShieldCheck, AlertCircle, Loader2, Globe, Search, Database } from 'lucide-react';
 import { getAiConfig, saveAiConfig, testAiConnection, DEFAULT_AI_CONFIG } from '../services/aiService';
+import { getSearchConfig, saveSearchConfig, testSearchConnection } from '../services/searchService';
+import { SearchProviderType, SearchResultItem } from '../types/search';
 
 interface AiConfigModalProps {
   isOpen: boolean;
@@ -56,8 +58,19 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({
   const [baseUrl, setBaseUrl] = useState(currentConfig.baseUrl);
   const [model, setModel] = useState(currentConfig.model);
 
+  // 联网搜索配置状态
+  const currentSearch = getSearchConfig();
+  const [searchEnabled, setSearchEnabled] = useState(currentSearch.enabled);
+  const [searchProvider, setSearchProvider] = useState<SearchProviderType>(currentSearch.provider);
+  const [searchApiKey, setSearchApiKey] = useState(currentSearch.apiKey);
+  const [searchEndpoint, setSearchEndpoint] = useState(currentSearch.endpoint || '');
+
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const [searchTesting, setSearchTesting] = useState(false);
+  const [searchTestResult, setSearchTestResult] = useState<{ success: boolean; message: string; results?: SearchResultItem[] } | null>(null);
+
   const [savedTip, setSavedTip] = useState(false);
 
   // 一键选择预设
@@ -65,11 +78,20 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({
     setBaseUrl(p.baseUrl);
     setModel(p.model);
     setTestResult(null);
+    if (p.model.includes('glm') || p.baseUrl.includes('bigmodel')) {
+      setSearchProvider('zhipu_builtin');
+    }
   };
 
   // 保存配置
   const handleSave = () => {
     saveAiConfig({ apiKey, baseUrl, model });
+    saveSearchConfig({
+      enabled: searchEnabled,
+      provider: searchProvider,
+      apiKey: searchApiKey,
+      endpoint: searchEndpoint,
+    });
     setSavedTip(true);
     if (onConfigSaved) onConfigSaved();
     setTimeout(() => {
@@ -78,7 +100,7 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({
     }, 900);
   };
 
-  // 测试连接
+  // 测试视觉大模型连接
   const handleTest = async () => {
     setTesting(true);
     setTestResult(null);
@@ -89,6 +111,28 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({
       setTestResult({ success: false, message: e.message || '测试出错' });
     } finally {
       setTesting(false);
+    }
+  };
+
+  // 真实测试实时联网检索连通性
+  const handleTestSearch = async () => {
+    setSearchTesting(true);
+    setSearchTestResult(null);
+    try {
+      const res = await testSearchConnection(
+        {
+          enabled: searchEnabled,
+          provider: searchProvider,
+          apiKey: searchApiKey,
+          endpoint: searchEndpoint,
+        },
+        apiKey
+      );
+      setSearchTestResult(res);
+    } catch (e: any) {
+      setSearchTestResult({ success: false, message: e.message || '搜索连通性测试出错' });
+    } finally {
+      setSearchTesting(false);
     }
   };
 
@@ -214,6 +258,115 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({
               className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-xs font-mono focus:outline-none focus:border-sky-500"
             />
           </div>
+        </div>
+
+        {/* 实时联网检索增强 (Web Search) 配置与真实连通性测试 */}
+        <div className="my-3.5 p-4 rounded-2xl bg-sky-50/60 border border-sky-200/70 space-y-3 text-xs">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Globe size={16} className="text-sky-600" />
+              <span className="font-bold text-slate-800">实时联网检索增强 (Web Search)</span>
+            </div>
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={searchEnabled}
+                onChange={(e) => setSearchEnabled(e.target.checked)}
+                className="rounded text-sky-600 focus:ring-sky-500 w-4 h-4"
+              />
+              <span className="text-[11px] font-semibold text-slate-700">开启联网</span>
+            </label>
+          </div>
+
+          <p className="text-[11px] text-slate-500 leading-relaxed">
+            实时检索权威品牌商品、饮料奶茶与中国传统菜肴真实配料表，避免 LLM 幻觉胡编。
+          </p>
+
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 mb-1">
+              联网搜索服务源
+            </label>
+            <select
+              value={searchProvider}
+              onChange={(e) => {
+                setSearchProvider(e.target.value as SearchProviderType);
+                setSearchTestResult(null);
+              }}
+              className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-semibold text-slate-800 focus:outline-none focus:border-sky-500"
+            >
+              <option value="zhipu_builtin">智谱原生 Web Search (推荐·与上方智谱Key共用)</option>
+              <option value="tavily">Tavily AI 智能搜索 (需单独填写 Key)</option>
+              <option value="authoritative_db">中国食物成分库 6.0 (本地权威库优先)</option>
+            </select>
+          </div>
+
+          {searchProvider === 'tavily' && (
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                Tavily API Key
+              </label>
+              <input
+                type="text"
+                placeholder="tvly-..."
+                value={searchApiKey}
+                onChange={(e) => {
+                  setSearchApiKey(e.target.value.trim());
+                  setSearchTestResult(null);
+                }}
+                className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-mono focus:outline-none focus:border-sky-500"
+              />
+            </div>
+          )}
+
+          {/* 真实测试联网搜索按钮 */}
+          <button
+            type="button"
+            onClick={handleTestSearch}
+            disabled={searchTesting || (!searchApiKey && !apiKey && searchProvider !== 'authoritative_db')}
+            className="w-full py-2.5 px-3 rounded-xl bg-white hover:bg-sky-50 border border-sky-300 text-sky-700 font-bold text-xs flex items-center justify-center gap-1.5 active:scale-[0.99] transition-all disabled:opacity-50 shadow-sm"
+          >
+            {searchTesting ? (
+              <>
+                <Loader2 size={14} className="animate-spin text-sky-600" />
+                <span>正在发起真实联网检索测试 (“天润纯牛奶”)...</span>
+              </>
+            ) : (
+              <>
+                <Search size={14} />
+                <span>发起真实联网搜索连通性测试</span>
+              </>
+            )}
+          </button>
+
+          {/* 搜索连通性测试结果横幅 */}
+          {searchTestResult && (
+            <div
+              className={`p-3 rounded-xl text-xs space-y-1 ${
+                searchTestResult.success
+                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                  : 'bg-rose-50 text-rose-800 border border-rose-200'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 font-bold">
+                {searchTestResult.success ? (
+                  <ShieldCheck size={14} className="text-emerald-600" />
+                ) : (
+                  <AlertCircle size={14} className="text-rose-600" />
+                )}
+                <span>{searchTestResult.message}</span>
+              </div>
+              {searchTestResult.results && searchTestResult.results.length > 0 && (
+                <div className="text-[10px] text-slate-600 bg-white/70 p-2 rounded-lg mt-1 space-y-0.5">
+                  <div className="font-semibold text-slate-800">
+                    检索证据示例：{searchTestResult.results[0].title}
+                  </div>
+                  <div className="line-clamp-2 text-slate-500">
+                    {searchTestResult.results[0].snippet}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* 测试结果提示 */}

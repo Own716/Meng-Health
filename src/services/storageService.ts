@@ -10,10 +10,13 @@ export const DEFAULT_PROFILE: UserProfile = {
   height: 165,
   currentWeight: 58.5,
   targetWeight: 52.0,
-  dailyBudget: 2200,
-  targetProtein: 130,
-  targetCarbs: 240,
-  targetFat: 70,
+  dailyBudget: 1750,
+  targetProtein: 105,
+  targetCarbs: 180,
+  targetFat: 50,
+  activityLevel: 'light',
+  durationDays: 60,
+  goalType: 'lose_weight',
 };
 
 // 获取今天的日期字符串 YYYY-MM-DD
@@ -215,7 +218,7 @@ export function exportBackupData(): void {
   const profile = getUserProfile();
   const history = getAllLogs();
   const backup: BackupData = {
-    version: '1.0.0',
+    version: '1.5.0',
     exportTime: new Date().toISOString(),
     userProfile: profile,
     history

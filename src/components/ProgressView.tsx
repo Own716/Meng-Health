@@ -353,7 +353,7 @@ export const ProgressView: React.FC<ProgressViewProps> = ({ profile }) => {
             <Flame size={14} className="text-orange-500" />
             <span>BMR 基础代谢</span>
           </div>
-          <div className="text-2xl font-black text-slate-800">{bmr} <span className="text-xs font-normal text-slate-400">千卡</span></div>
+          <div className="text-2xl font-black text-slate-800">{bmr} <span className="text-xs font-normal text-slate-400">大卡</span></div>
           <p className="text-[10px] text-slate-400 mt-1">维持生命呼吸机能的最低消耗</p>
         </div>
 
@@ -362,7 +362,7 @@ export const ProgressView: React.FC<ProgressViewProps> = ({ profile }) => {
             <Scale size={14} className="text-blue-500" />
             <span>TDEE 每日总消耗</span>
           </div>
-          <div className="text-2xl font-black text-slate-800">{tdee} <span className="text-xs font-normal text-slate-400">千卡</span></div>
+          <div className="text-2xl font-black text-slate-800">{tdee} <span className="text-xs font-normal text-slate-400">大卡</span></div>
           <p className="text-[10px] text-slate-400 mt-1">包含轻度活动的机体全天总支出</p>
         </div>
       </div>
@@ -374,7 +374,7 @@ export const ProgressView: React.FC<ProgressViewProps> = ({ profile }) => {
           <span>科学减重小建议</span>
         </div>
         <p className="text-slate-600 text-[11px]">
-          1. 制造每天 300 ~ 500 千卡的热量缺口，折线图中折线保持在上限虚线下方即为稳步减脂。
+          1. 制造每天 300 ~ 500 大卡的热量缺口，折线图中折线保持在上限虚线下方即为稳步减脂。
         </p>
         <p className="text-slate-600 text-[11px]">
           2. 蛋白质建议每天按体重 × 1.6g~2.0g 摄入，维持饱腹感并保护瘦体重。

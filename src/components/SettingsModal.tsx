@@ -85,10 +85,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
               <div>
                 <div className="text-xs font-bold text-slate-800 group-hover:text-sky-700">
-                  AI 视觉大模型与 API Key 配置
+                  AI 视觉大模型与联网检索配置
                 </div>
                 <div className="text-[11px] text-slate-400 mt-0.5">
-                  智谱 GLM-4V-Flash / 通义千问 / Gemini / 连通测试
+                  智谱 GLM-4V / 实时联网搜索 / 权威成分库 / 连通测试
                 </div>
               </div>
             </div>
@@ -243,7 +243,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <span>关于 Meng Health · 梦健康</span>
             </span>
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-200/70 text-blue-800 font-bold">
-              v1.4.0 正式版
+              v1.5.0 正式版
             </span>
           </div>
 
@@ -254,7 +254,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </p>
             <p className="flex items-center gap-1">
               <ShieldCheck size={12} className="text-emerald-600 flex-shrink-0" />
-              <span><strong>纯隐私本地运行</strong>：无强制注册、零后台窃密，所有饮食日记与 API Key 均完整存放于您的手机中。</span>
+              <span><strong>中式地道菜品与纯本地隐私</strong>：专项辨析中式主食菜肴(如馒头夹菜/肉夹馍)，所有日记与数据完整存放于手机本地。</span>
             </p>
           </div>
         </div>

@@ -192,7 +192,7 @@ export const AddFoodModal: React.FC<AddFoodModalProps> = ({
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                总热量 (千卡/kcal) *
+                总热量 (大卡/kcal) *
               </label>
               <input
                 type="text"

@@ -71,7 +71,7 @@ export function App() {
   const handleAddFood = (food: Omit<FoodItem, 'id'>) => {
     const updated = addFoodToMeal(currentDate, activeMealType, food);
     setDayLog({ ...updated });
-    showToast(`已成功添加「${food.name}」(${food.calories}千卡)`);
+    showToast(`已成功添加「${food.name}」(${food.calories}大卡)`);
   };
 
   // 批量添加 AI 识别结果食物
@@ -96,7 +96,7 @@ export function App() {
     saveUserProfile(updatedProfile);
     setProfile(updatedProfile);
 
-    // 关键修复：同步更新并持久化保存当前日期的预算和营养素指标
+    // 同步更新并持久化保存当前日期的预算和营养素指标
     const log = getDayLog(currentDate);
     log.budgetCalories = updatedProfile.dailyBudget;
     log.targetProtein = updatedProfile.targetProtein;
@@ -105,31 +105,24 @@ export function App() {
     saveDayLog(log);
     setDayLog({ ...log });
 
-    showToast(`个人目标已保存！每日预算已设定为 ${updatedProfile.dailyBudget} 千卡`);
+    showToast(`个人目标已保存！每日预算已设定为 ${updatedProfile.dailyBudget} 大卡`);
   };
 
-  // 应用 AI 智能测算出的减脂方案（关键修复：确保持久化存入 localStorage 并立刻生效）
-  const handleApplyAiPlan = (newBudget: number, protein: number, carbs: number, fat: number) => {
-    const updated: UserProfile = {
-      ...profile,
-      dailyBudget: newBudget,
-      targetProtein: protein,
-      targetCarbs: carbs,
-      targetFat: fat,
-    };
-    saveUserProfile(updated);
-    setProfile(updated);
+  // 应用 AI 智能测算出的减脂方案（关键修复：完整持久化存入 localStorage 并立刻生效）
+  const handleApplyAiPlan = (updatedProfile: UserProfile) => {
+    saveUserProfile(updatedProfile);
+    setProfile(updatedProfile);
 
-    // 关键修复：调用 saveDayLog 真正写入本地数据库并刷新页面
+    // 同步更新并持久化保存当前日期的预算和营养素指标
     const log = getDayLog(currentDate);
-    log.budgetCalories = newBudget;
-    log.targetProtein = protein;
-    log.targetCarbs = carbs;
-    log.targetFat = fat;
+    log.budgetCalories = updatedProfile.dailyBudget;
+    log.targetProtein = updatedProfile.targetProtein;
+    log.targetCarbs = updatedProfile.targetCarbs;
+    log.targetFat = updatedProfile.targetFat;
     saveDayLog(log);
     setDayLog({ ...log });
 
-    showToast(`✨ AI 减脂计划已生效！每日摄入预算设定为 ${newBudget} 千卡`);
+    showToast(`✨ AI 减脂计划已生效！每日摄入预算设定为 ${updatedProfile.dailyBudget} 大卡`);
   };
 
   // 计算今日三大营养素总和
@@ -221,7 +214,7 @@ export function App() {
             <div className="pt-2 px-4">
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-base font-bold text-slate-900">今日餐次与食物记录</h2>
-                <span className="text-xs text-slate-400">已摄入 {dayLog.consumedCalories} 千卡</span>
+                <span className="text-xs text-slate-400">已摄入 {dayLog.consumedCalories} 大卡</span>
               </div>
               <MealCards
                 dayLog={dayLog}

@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
-import { X, Sparkles, Check, ArrowRight, Flame, Scale, TrendingDown, Calendar, ShieldCheck } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Sparkles, Check, ArrowRight, Flame, Scale, TrendingDown, Calendar, ShieldCheck, MessageSquare } from 'lucide-react';
 import { UserProfile } from '../types/diet';
+import { calculateDietPlan, ACTIVITY_MULTIPLIERS } from '../services/calorieCalculator';
+import { generateAiPlanCoaching } from '../services/aiService';
 
 interface AiPlanModalProps {
   isOpen: boolean;
   profile: UserProfile;
   onClose: () => void;
-  onApplyPlan: (newBudget: number, protein: number, carbs: number, fat: number) => void;
+  onApplyPlan: (updatedProfile: UserProfile) => void;
 }
 
 export const AiPlanModal: React.FC<AiPlanModalProps> = ({
@@ -17,81 +19,84 @@ export const AiPlanModal: React.FC<AiPlanModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
-  // 用户可随时调整的测算参数
-  const [curWeight, setCurWeight] = useState(String(profile.currentWeight || ''));
-  const [tgtWeight, setTgtWeight] = useState(String(profile.targetWeight || ''));
-  const [height, setHeight] = useState(String(profile.height || ''));
-  const [age, setAge] = useState('25');
+  // 用户可随时调整的测算参数（严格从已有 profile 初始化，确保二次打开时完整保留）
+  const [curWeight, setCurWeight] = useState(profile.currentWeight ? String(profile.currentWeight) : '58.5');
+  const [tgtWeight, setTgtWeight] = useState(profile.targetWeight ? String(profile.targetWeight) : '52.0');
+  const [height, setHeight] = useState(profile.height ? String(profile.height) : '165');
+  const [age, setAge] = useState(profile.age ? String(profile.age) : '25');
   const [gender, setGender] = useState<'female' | 'male'>(profile.gender || 'female');
-  const [activity, setActivity] = useState<'sedentary' | 'light' | 'moderate' | 'heavy'>('light');
-  const [durationDays, setDurationDays] = useState(60); // 期望减脂周期：60天
-  const [isCalculated, setIsCalculated] = useState(false);
+  const [activity, setActivity] = useState<'sedentary' | 'light' | 'moderate' | 'heavy'>(profile.activityLevel || 'light');
+  const [durationDays, setDurationDays] = useState(profile.durationDays || 60);
   const [applied, setApplied] = useState(false);
+  const [aiCoaching, setAiCoaching] = useState<string>('');
+  const [loadingCoaching, setLoadingCoaching] = useState(false);
 
-  // 活动系数映射
-  const activityFactors = {
-    sedentary: { label: '久坐伏案 (缺乏运动)', factor: 1.2 },
-    light: { label: '轻度活动 (每周运动1-3次)', factor: 1.375 },
-    moderate: { label: '中度运动 (每周运动3-5次)', factor: 1.55 },
-    heavy: { label: '高强度运动 (体力劳动/重训)', factor: 1.725 },
+  // 每次弹窗打开时，根据最新的 profile 初始化各项参数，保证保存的设置始终记忆生效
+  useEffect(() => {
+    if (isOpen) {
+      if (profile.currentWeight) setCurWeight(String(profile.currentWeight));
+      if (profile.targetWeight) setTgtWeight(String(profile.targetWeight));
+      if (profile.height) setHeight(String(profile.height));
+      if (profile.age) setAge(String(profile.age));
+      if (profile.gender) setGender(profile.gender);
+      if (profile.activityLevel) setActivity(profile.activityLevel);
+      if (profile.durationDays) setDurationDays(profile.durationDays);
+    }
+  }, [isOpen, profile]);
+
+  // 科学确定性算法推导
+  const plan = calculateDietPlan({
+    currentWeight: parseFloat(curWeight) || 58.5,
+    targetWeight: parseFloat(tgtWeight) || 52.0,
+    height: parseFloat(height) || 165,
+    age: parseInt(age) || 25,
+    gender,
+    activityLevel: activity,
+    durationDays: durationDays || 60,
+  });
+
+  // 获取 AI 智能教练专属建议
+  const handleFetchAiCoaching = async () => {
+    setLoadingCoaching(true);
+    try {
+      const coaching = await generateAiPlanCoaching(
+        {
+          ...profile,
+          currentWeight: parseFloat(curWeight) || profile.currentWeight,
+          targetWeight: parseFloat(tgtWeight) || profile.targetWeight,
+          height: parseFloat(height) || profile.height,
+          age: parseInt(age) || profile.age || 25,
+          gender,
+          durationDays,
+        },
+        plan
+      );
+      setAiCoaching(coaching);
+    } catch {
+      setAiCoaching('建议减脂期保证充足水份，主食粗细搭配，多选择鱼虾鸡胸等优质高蛋白。');
+    } finally {
+      setLoadingCoaching(false);
+    }
   };
-
-  // 科学推导算法
-  const calculatePlan = () => {
-    const w = parseFloat(curWeight) || 60;
-    const targetW = parseFloat(tgtWeight) || 55;
-    const h = parseFloat(height) || 165;
-    const a = parseInt(age) || 25;
-
-    // 1. Mifflin-St Jeor 基础代谢 BMR
-    const bmr = Math.round(
-      10 * w + 6.25 * h - 5 * a + (gender === 'male' ? 5 : -161)
-    );
-
-    // 2. 每日总消耗 (摄出量 / TDEE)
-    const factor = activityFactors[activity].factor;
-    const tdee = Math.round(bmr * factor);
-
-    // 3. 需减重量与热量缺口
-    const weightToLose = Math.max(0, w - targetW);
-    // 每减 1kg 纯脂肪需制造 7700 kcal 缺口
-    const totalDeficitNeeded = weightToLose * 7700;
-    const dailyDeficitSuggested = Math.min(600, Math.max(300, Math.round(totalDeficitNeeded / (durationDays || 60))));
-
-    // 4. 建议每日摄入量 (Intake)
-    // 摄入量不能低于基础代谢 BMR 太远以防伤身体
-    const safeIntake = Math.max(bmr, tdee - dailyDeficitSuggested);
-
-    // 5. 三大营养素智能分配 (推荐减脂期高蛋白策略)
-    // 蛋白质：体重 × 1.8g (每克4千卡)
-    const proteinGrams = Math.round(w * 1.8);
-    const proteinCal = proteinGrams * 4;
-
-    // 脂肪：占总摄入热量 25% (每克9千卡)
-    const fatCal = Math.round(safeIntake * 0.25);
-    const fatGrams = Math.round(fatCal / 9);
-
-    // 碳水化合物：剩余热量 (每克4千卡)
-    const carbsCal = Math.max(0, safeIntake - proteinCal - fatCal);
-    const carbsGrams = Math.round(carbsCal / 4);
-
-    return {
-      bmr,
-      tdee, // 每日摄出量
-      safeIntake, // 建议每日摄入量
-      dailyDeficitSuggested, // 每日热量缺口
-      weightToLose,
-      proteinGrams,
-      carbsGrams,
-      fatGrams,
-      weeklyLoss: ((dailyDeficitSuggested * 7) / 7700).toFixed(2),
-    };
-  };
-
-  const plan = calculatePlan();
 
   const handleApply = () => {
-    onApplyPlan(plan.safeIntake, plan.proteinGrams, plan.carbsGrams, plan.fatGrams);
+    // 关键升级：将用户修改的体重、身高、年龄、性别、活动水平、减脂周期、预算和三大营养素完整保存
+    const updatedProfile: UserProfile = {
+      ...profile,
+      currentWeight: parseFloat(curWeight) || profile.currentWeight,
+      targetWeight: parseFloat(tgtWeight) || profile.targetWeight,
+      height: parseFloat(height) || profile.height,
+      age: parseInt(age) || profile.age || 25,
+      gender,
+      activityLevel: activity,
+      durationDays: durationDays || 60,
+      dailyBudget: plan.safeIntake,
+      targetProtein: plan.proteinGrams,
+      targetCarbs: plan.carbsGrams,
+      targetFat: plan.fatGrams,
+    };
+
+    onApplyPlan(updatedProfile);
     setApplied(true);
     setTimeout(() => {
       setApplied(false);
@@ -110,7 +115,7 @@ export const AiPlanModal: React.FC<AiPlanModalProps> = ({
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-900">AI 智能摄入与摄出量测算</h3>
-              <p className="text-[11px] text-slate-400">基于身材目标与代谢，定制科学减脂计划</p>
+              <p className="text-[11px] text-slate-400">基于身体代谢与真实目标，定制科学减脂计划</p>
             </div>
           </div>
           <button
@@ -121,86 +126,124 @@ export const AiPlanModal: React.FC<AiPlanModalProps> = ({
           </button>
         </div>
 
-        {/* 输入参数卡片 */}
-        <div className="my-4 space-y-3">
+        {/* 身体参数输入表单 */}
+        <div className="py-4 space-y-3.5 text-xs">
+          {/* 性别选择 */}
+          <div>
+            <label className="block font-bold text-slate-700 mb-1.5">生理性别 (基础代谢系数不同)</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setGender('female')}
+                className={`py-2 rounded-xl font-bold border transition-all ${
+                  gender === 'female'
+                    ? 'bg-rose-50 border-rose-400 text-rose-600 shadow-sm'
+                    : 'bg-slate-50 border-slate-200 text-slate-600'
+                }`}
+              >
+                👩 女性
+              </button>
+              <button
+                type="button"
+                onClick={() => setGender('male')}
+                className={`py-2 rounded-xl font-bold border transition-all ${
+                  gender === 'male'
+                    ? 'bg-blue-50 border-blue-400 text-blue-600 shadow-sm'
+                    : 'bg-slate-50 border-slate-200 text-slate-600'
+                }`}
+              >
+                👨 男性
+              </button>
+            </div>
+          </div>
+
+          {/* 身高、当前体重、目标体重、年龄 */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                当前体重 (kg)
-              </label>
+              <label className="block font-bold text-slate-700 mb-1">身高 (cm)</label>
               <input
-                type="text"
-                inputMode="decimal"
-                value={curWeight}
-                onChange={(e) => setCurWeight(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-900 focus:bg-white focus:border-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                目标体重 (kg)
-              </label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={tgtWeight}
-                onChange={(e) => setTgtWeight(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold text-emerald-600 focus:bg-white focus:border-emerald-500"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-600 mb-1">身高 (cm)</label>
-              <input
-                type="text"
-                inputMode="numeric"
+                type="number"
                 value={height}
                 onChange={(e) => setHeight(e.target.value)}
-                className="w-full px-2.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-center"
+                placeholder="165"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:outline-none font-bold text-slate-800"
               />
             </div>
             <div>
-              <label className="block text-[11px] font-semibold text-slate-600 mb-1">年龄 (岁)</label>
+              <label className="block font-bold text-slate-700 mb-1">年龄 (周岁)</label>
               <input
-                type="text"
-                inputMode="numeric"
+                type="number"
                 value={age}
                 onChange={(e) => setAge(e.target.value)}
-                className="w-full px-2.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-center"
+                placeholder="25"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:outline-none font-bold text-slate-800"
               />
-            </div>
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-600 mb-1">期望周期</label>
-              <select
-                value={durationDays}
-                onChange={(e) => setDurationDays(Number(e.target.value))}
-                className="w-full px-1 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-center font-medium"
-              >
-                <option value={30}>30 天</option>
-                <option value={60}>60 天</option>
-                <option value={90}>90 天</option>
-                <option value={120}>120 天</option>
-              </select>
             </div>
           </div>
 
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">当前体重 (kg)</label>
+              <input
+                type="number"
+                step="0.1"
+                value={curWeight}
+                onChange={(e) => setCurWeight(e.target.value)}
+                placeholder="58.5"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:outline-none font-bold text-slate-800"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">目标体重 (kg)</label>
+              <input
+                type="number"
+                step="0.1"
+                value={tgtWeight}
+                onChange={(e) => setTgtWeight(e.target.value)}
+                placeholder="52.0"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:outline-none font-bold text-emerald-600"
+              />
+            </div>
+          </div>
+
+          {/* 期望减脂周期 */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">日常活动强度</label>
-            <div className="grid grid-cols-2 gap-2">
-              {(Object.keys(activityFactors) as Array<keyof typeof activityFactors>).map((k) => (
+            <div className="flex justify-between items-center mb-1">
+              <label className="font-bold text-slate-700">期望减脂周期</label>
+              <span className="font-black text-blue-600">{durationDays} 天</span>
+            </div>
+            <input
+              type="range"
+              min="20"
+              max="180"
+              step="5"
+              value={durationDays}
+              onChange={(e) => setDurationDays(Number(e.target.value))}
+              className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+            />
+            <div className="flex justify-between text-[10px] text-slate-400 mt-0.5">
+              <span>快速 30天</span>
+              <span>稳健 60天 (推荐)</span>
+              <span>平缓 90天+</span>
+            </div>
+          </div>
+
+          {/* 活动水平 */}
+          <div>
+            <label className="block font-bold text-slate-700 mb-1.5">日常日常活动强度</label>
+            <div className="space-y-1.5">
+              {(Object.keys(ACTIVITY_MULTIPLIERS) as Array<keyof typeof ACTIVITY_MULTIPLIERS>).map((k) => (
                 <button
                   key={k}
                   type="button"
                   onClick={() => setActivity(k)}
-                  className={`text-left p-2 rounded-xl border text-[11px] transition-all ${
+                  className={`w-full py-2 px-3 rounded-xl border text-left font-medium transition-all ${
                     activity === k
-                      ? 'bg-blue-50 border-blue-500 text-blue-800 font-bold'
+                      ? 'bg-blue-50 border-blue-400 text-blue-700 font-bold shadow-sm'
                       : 'bg-slate-50 border-slate-200 text-slate-600'
                   }`}
                 >
-                  {activityFactors[k].label}
+                  {ACTIVITY_MULTIPLIERS[k].label}
                 </button>
               ))}
             </div>
@@ -213,7 +256,7 @@ export const AiPlanModal: React.FC<AiPlanModalProps> = ({
             <span className="font-bold flex items-center gap-1 text-sky-400">
               <Sparkles size={14} /> AI 科学减脂推导报告
             </span>
-            <span className="text-slate-300">需减重: <strong className="text-emerald-400">{plan.weightToLose}kg</strong></span>
+            <span className="text-slate-300">需减重: <strong className="text-emerald-400">{plan.weightToLose} kg</strong></span>
           </div>
 
           {/* 摄入量 VS 摄出量 核心指标 */}
@@ -224,9 +267,9 @@ export const AiPlanModal: React.FC<AiPlanModalProps> = ({
                 <span>每日摄出消耗 (TDEE)</span>
               </div>
               <div className="text-2xl font-black text-sky-300 mt-1">
-                {plan.tdee} <span className="text-xs text-slate-300">千卡</span>
+                {plan.tdee} <span className="text-xs text-slate-300">大卡</span>
               </div>
-              <div className="text-[10px] text-slate-400 mt-0.5">基础代谢 {plan.bmr} kcal</div>
+              <div className="text-[10px] text-slate-400 mt-0.5">基础代谢 {plan.bmr} 大卡</div>
             </div>
 
             <div className="bg-white/10 p-3 rounded-xl border border-emerald-500/30">
@@ -235,9 +278,9 @@ export const AiPlanModal: React.FC<AiPlanModalProps> = ({
                 <span>建议每日摄入量</span>
               </div>
               <div className="text-2xl font-black text-emerald-400 mt-1">
-                {plan.safeIntake} <span className="text-xs text-slate-300">千卡</span>
+                {plan.safeIntake} <span className="text-xs text-slate-300">大卡</span>
               </div>
-              <div className="text-[10px] text-emerald-300/80 mt-0.5">每日缺口约 {plan.dailyDeficitSuggested} kcal</div>
+              <div className="text-[10px] text-emerald-300/80 mt-0.5">每日缺口约 {plan.dailyDeficit} 大卡</div>
             </div>
           </div>
 
@@ -264,8 +307,30 @@ export const AiPlanModal: React.FC<AiPlanModalProps> = ({
 
           {/* 预期进度 */}
           <div className="text-[11px] text-slate-300 flex items-center justify-between pt-1">
-            <span>预计每周减纯脂: <strong className="text-white">{plan.weeklyLoss} kg</strong></span>
+            <span>预计每周减纯脂: <strong className="text-white">{plan.weeklyPaceKg} kg</strong></span>
             <span>周期: <strong className="text-sky-300">{durationDays} 天</strong> 达标</span>
+          </div>
+
+          {/* AI 营养教练建议 */}
+          <div className="pt-1">
+            {aiCoaching ? (
+              <div className="p-3 bg-sky-950/60 border border-sky-500/30 rounded-xl text-xs text-sky-200 leading-relaxed animate-fadeIn">
+                <div className="font-bold flex items-center gap-1.5 text-sky-400 mb-1">
+                  <MessageSquare size={13} /> AI 营养师专属指导：
+                </div>
+                {aiCoaching}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={handleFetchAiCoaching}
+                disabled={loadingCoaching}
+                className="w-full py-2 px-3 rounded-xl bg-white/10 hover:bg-white/15 text-sky-300 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+              >
+                <Sparkles size={13} />
+                <span>{loadingCoaching ? 'AI 正在生成定制营养建议...' : '获取 AI 营养师专属减脂建议'}</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -278,11 +343,11 @@ export const AiPlanModal: React.FC<AiPlanModalProps> = ({
           {applied ? (
             <>
               <Check size={18} className="text-emerald-300" />
-              <span>已成功应用为我的每日目标！</span>
+              <span>已保存配置并应用为每日目标！</span>
             </>
           ) : (
             <>
-              <span>一键应用为此减脂计划 (自动设定目标)</span>
+              <span>一键保存并应用为每日目标</span>
               <ArrowRight size={16} />
             </>
           )}
