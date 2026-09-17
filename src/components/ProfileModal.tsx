@@ -39,7 +39,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
 
     const updatedProfile: UserProfile = {
       ...profile,
-      nickname: nickname.trim() || '自律小萌',
+      nickname: nickname.trim() || '梦梦',
       height: parseFloat(height) || 165,
       currentWeight: parseFloat(currentWeight) || 60,
       targetWeight: parseFloat(targetWeight) || 55,

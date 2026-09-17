@@ -51,15 +51,15 @@ jobs:
       - name: Prepare APK Output
         run: |
           mkdir -p release-apk
-          cp android/app/build/outputs/apk/debug/app-debug.apk release-apk/Meng-Health-v1.1.0.apk
-          echo "APK generated successfully at release-apk/Meng-Health-v1.1.0.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk release-apk/Meng-Health-v1.2.0.apk
+          echo "APK generated successfully at release-apk/Meng-Health-v1.2.0.apk"
           ls -lh release-apk/
 
       - name: Upload APK as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Meng-Health-v1.1.0-APK
-          path: release-apk/Meng-Health-v1.1.0.apk
+          name: Meng-Health-v1.2.0-APK
+          path: release-apk/Meng-Health-v1.2.0.apk
 
       - name: Determine Release Tag
         id: release_tag
@@ -67,7 +67,7 @@ jobs:
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           else
-            echo "tag=v1.1.0" >> $GITHUB_OUTPUT
+            echo "tag=v1.2.0" >> $GITHUB_OUTPUT
           fi
 
       - name: Create GitHub Release & Upload APK
@@ -75,23 +75,21 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
         with:
           tag_name: ${{ steps.release_tag.outputs.tag }}
-          name: Meng Health ${{ steps.release_tag.outputs.tag }} 体验优化与问题修复版
+          name: Meng Health ${{ steps.release_tag.outputs.tag }} 体验重构与全面修复版
           draft: false
           prerelease: false
           make_latest: true
           body: |
-            ## Meng Health (萌健康) v1.1.0 体验修复与升级版 🥑
+            ## Meng Health (梦健康) v1.2.0 体验重构与全面修复版 🥑
             
-            ### 🛠️ 本次核心修复与优化：
-            1. 📊 **AI 智能计算摄入量与摄出量**：根据当前体重、目标体重与活动量，智能测算 TDEE 每日总消耗、建议摄入量、三大营养素分配与减脂周期，支持一键应用！
-            2. 🎯 **彻底解决 UI 文字与圆环重叠**：修复能量圆环底部文字被进度线条切分重叠的问题，排版清爽清晰。
-            3. ✏️ **修复体重与数值输入框“0 删不掉”问题**：删除数字不再被强制重置为 0，支持自由退格输入自己的真实数据。
-            4. 📱 **修复手机手势底栏泛白问题**：Android 原生导航栏背景深度融入 App 背景色，彻底消除白色底条割裂感。
-            5. 🗓️ **日期切换丝滑升级**：改为稳固周视图滑动高亮，告别跳变闪烁；新增**下拉展开全月日历**，方便跨月挑选查看。
-            6. 🔍 **丰富减脂食物库与即时搜索**：支持在添加食物时按名称/标签快速搜索。
+            ### 🛠️ 本次核心改进与修复：
+            1. 🗓️ **日期支持自由左右横向滑动选周**：顶部增加横跨 6 周的可滑动日期条，可自由向左/向右滑动跨周查看（包括下周、上周），支持点击「回到今天」或翻页！
+            2. 💾 **修复 AI 减脂计划与设置保存失效 Bug**：重构底层状态持久化，一键应用 AI 计划后立刻同步写入数据库并更新首页大盘预算，新增全局保存 Toast 提示。
+            3. 📸 **AI 智能速记暗光与黑屏检测**：增加图像亮度与画面有效性检测算法，拍摄黑屏或过暗照片将明确友好提示重新拍摄，杜绝误识别为固定菜品。
+            4. 🥑 **产品品牌与昵称更正**：全面更名为「Meng Health · 梦健康」，用户昵称与问候语统一设为「梦梦」。
             
             ### 📲 下载安装：
-            请在下方 **Assets** 列表中下载 **`Meng-Health-v1.1.0.apk`** 直接安装体验！
-          files: release-apk/Meng-Health-v1.1.0.apk
+            请在下方 **Assets** 列表中下载 **`Meng-Health-v1.2.0.apk`** 直接覆盖安装即可体验！
+          files: release-apk/Meng-Health-v1.2.0.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

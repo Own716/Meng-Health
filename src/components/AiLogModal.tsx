@@ -34,10 +34,13 @@ export const AiLogModal: React.FC<AiLogModalProps> = ({
     }
   };
 
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   // 触发 AI 分析
   const handleAnalyze = async () => {
+    setErrorMessage(null);
     if (!textInput.trim() && !selectedImage) {
-      alert('请先输入吃了什么，或者上传/拍摄一张饭菜照片');
+      setErrorMessage('请先输入饮食描述，或者拍摄/上传一张饭菜照片');
       return;
     }
 
@@ -48,8 +51,8 @@ export const AiLogModal: React.FC<AiLogModalProps> = ({
         textDescription: textInput
       });
       setAiResults(results);
-    } catch (err) {
-      alert('AI 识别遇到一点小问题，请稍后重试');
+    } catch (err: any) {
+      setErrorMessage(err?.message || '识别失败，请确保照片清晰且光线充足');
     } finally {
       setLoading(false);
     }
@@ -152,6 +155,13 @@ export const AiLogModal: React.FC<AiLogModalProps> = ({
             className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs focus:outline-none focus:border-sky-500 focus:bg-white resize-none"
           />
         </div>
+
+        {/* 错误提示横幅 */}
+        {errorMessage && (
+          <div className="mb-4 p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold leading-relaxed animate-shake">
+            ⚠️ {errorMessage}
+          </div>
+        )}
 
         {/* 开始识别按钮 */}
         {!aiResults && (

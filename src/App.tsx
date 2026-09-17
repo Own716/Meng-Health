@@ -13,11 +13,13 @@ import { CalendarModal } from './components/CalendarModal';
 import { AiPlanModal } from './components/AiPlanModal';
 import { JournalView } from './components/JournalView';
 import { ProgressView } from './components/ProgressView';
+import { CheckCircle2 } from 'lucide-react';
 import {
   getTodayString,
   getDayLog,
   getUserProfile,
   saveUserProfile,
+  saveDayLog,
   addFoodToMeal,
   removeFoodFromMeal,
 } from './services/storageService';
@@ -28,6 +30,16 @@ export function App() {
   const [profile, setProfile] = useState<UserProfile>(getUserProfile());
   const [dayLog, setDayLog] = useState<DayLog>(getDayLog(getTodayString()));
   const [activeTab, setActiveTab] = useState<NavTab>('home');
+
+  // 全局 Toast 提示状态
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 2800);
+  };
 
   // 弹窗状态
   const [addFoodModalOpen, setAddFoodModalOpen] = useState(false);
@@ -43,17 +55,19 @@ export function App() {
     setDayLog(getDayLog(currentDate));
   }, [currentDate]);
 
-  // 重新加载所有数据（导入备份或修改设置后）
+  // 重新加载所有数据（导入备份或重置后）
   const handleReloadAll = () => {
     const p = getUserProfile();
     setProfile(p);
     setDayLog(getDayLog(currentDate));
+    showToast('数据已全面同步刷新！');
   };
 
   // 添加单项食物
   const handleAddFood = (food: Omit<FoodItem, 'id'>) => {
     const updated = addFoodToMeal(currentDate, activeMealType, food);
     setDayLog({ ...updated });
+    showToast(`已成功添加「${food.name}」(${food.calories}千卡)`);
   };
 
   // 批量添加 AI 识别结果食物
@@ -63,15 +77,34 @@ export function App() {
       latestLog = addFoodToMeal(currentDate, mealType, food);
     }
     setDayLog({ ...latestLog });
+    showToast(`已成功将 AI 识别的 ${foods.length} 样食物存入今日记录！`);
   };
 
   // 删除食物
   const handleDeleteFood = (mealType: MealType, foodId: string) => {
     const updated = removeFoodFromMeal(currentDate, mealType, foodId);
     setDayLog({ ...updated });
+    showToast('已删除该饮食条目');
   };
 
-  // 应用 AI 智能测算出的减脂方案
+  // 更新个人资料并持久化同步今日指标
+  const handleUpdateProfile = (updatedProfile: UserProfile) => {
+    saveUserProfile(updatedProfile);
+    setProfile(updatedProfile);
+
+    // 关键修复：同步更新并持久化保存当前日期的预算和营养素指标
+    const log = getDayLog(currentDate);
+    log.budgetCalories = updatedProfile.dailyBudget;
+    log.targetProtein = updatedProfile.targetProtein;
+    log.targetCarbs = updatedProfile.targetCarbs;
+    log.targetFat = updatedProfile.targetFat;
+    saveDayLog(log);
+    setDayLog({ ...log });
+
+    showToast(`个人目标已保存！每日预算已设定为 ${updatedProfile.dailyBudget} 千卡`);
+  };
+
+  // 应用 AI 智能测算出的减脂方案（关键修复：确保持久化存入 localStorage 并立刻生效）
   const handleApplyAiPlan = (newBudget: number, protein: number, carbs: number, fat: number) => {
     const updated: UserProfile = {
       ...profile,
@@ -82,13 +115,17 @@ export function App() {
     };
     saveUserProfile(updated);
     setProfile(updated);
-    // 同时更新当天的预算指标
+
+    // 关键修复：调用 saveDayLog 真正写入本地数据库并刷新页面
     const log = getDayLog(currentDate);
     log.budgetCalories = newBudget;
     log.targetProtein = protein;
     log.targetCarbs = carbs;
     log.targetFat = fat;
+    saveDayLog(log);
     setDayLog({ ...log });
+
+    showToast(`✨ AI 减脂计划已生效！每日摄入预算设定为 ${newBudget} 千卡`);
   };
 
   // 计算今日三大营养素总和
@@ -105,9 +142,9 @@ export function App() {
       }
     }
     return {
-      protein: { current: Math.round(p), target: profile.targetProtein },
-      carbs: { current: Math.round(c), target: profile.targetCarbs },
-      fat: { current: Math.round(f), target: profile.targetFat },
+      protein: { current: Math.round(p), target: dayLog.targetProtein || profile.targetProtein },
+      carbs: { current: Math.round(c), target: dayLog.targetCarbs || profile.targetCarbs },
+      fat: { current: Math.round(f), target: dayLog.targetFat || profile.targetFat },
     };
   };
 
@@ -116,7 +153,17 @@ export function App() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex justify-center selection:bg-blue-100">
       <div className="w-full max-w-md min-h-screen flex flex-col bg-slate-50 relative pb-safe">
-        {/* 顶部导航栏 */}
+        {/* 全局提示 Toast */}
+        {toastMessage && (
+          <div className="fixed top-6 inset-x-0 z-50 flex justify-center px-4 pointer-events-none animate-slideDown">
+            <div className="bg-slate-900/90 backdrop-blur-md text-white px-4 py-2.5 rounded-full shadow-2xl text-xs font-bold flex items-center gap-2 border border-white/20">
+              <CheckCircle2 size={16} className="text-emerald-400 flex-shrink-0" />
+              <span>{toastMessage}</span>
+            </div>
+          </div>
+        )}
+
+        {/* 顶部导航栏（支持左右滑动切换日期、上周下周、全月日历） */}
         <Header
           currentDate={currentDate}
           onSelectDate={(d) => {
@@ -144,7 +191,7 @@ export function App() {
                 fat={macros.fat}
               />
 
-              {/* ✨ AI 智能速记卡片 & 计划测算入口 */}
+              {/* ✨ AI 智能速记卡片 & 摄入/摄出量计划测算入口 */}
               <AiSmartLogCard
                 onOpenAiLog={() => setAiModalOpen(true)}
                 onOpenAiPlan={() => setAiPlanModalOpen(true)}
@@ -193,11 +240,11 @@ export function App() {
           {activeTab === 'profile' && (
             <div className="px-5 pt-3 pb-28 space-y-4">
               <div className="p-5 rounded-3xl bg-white border border-slate-100 shadow-sm text-center">
-                <div className="w-16 h-16 rounded-full bg-blue-600 text-white font-black text-xl flex items-center justify-center mx-auto mb-2 shadow-md shadow-blue-400/30">
-                  {profile.nickname.substring(0, 1)}
+                <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-black text-xl flex items-center justify-center mx-auto mb-2 shadow-md shadow-blue-400/30">
+                  {profile.nickname.substring(0, 1) || '梦'}
                 </div>
-                <h3 className="font-bold text-base text-slate-900">{profile.nickname}</h3>
-                <p className="text-xs text-slate-400 mt-0.5">坚持记录 · 遇见更好的自己</p>
+                <h3 className="font-bold text-base text-slate-900">梦梦</h3>
+                <p className="text-xs text-slate-400 mt-0.5">Hi, 梦梦 · 坚持记录，遇见更好的自己</p>
                 <div className="mt-4 flex justify-center gap-4 text-xs text-slate-600 border-t border-slate-100 pt-3">
                   <div>身高 <span className="font-bold text-slate-800">{profile.height}</span> cm</div>
                   <div>当前 <span className="font-bold text-slate-800">{profile.currentWeight}</span> kg</div>
@@ -277,7 +324,7 @@ export function App() {
           isOpen={profileModalOpen}
           profile={profile}
           onClose={() => setProfileModalOpen(false)}
-          onUpdateProfile={(p) => setProfile(p)}
+          onUpdateProfile={handleUpdateProfile}
           onOpenBackup={() => setBackupModalOpen(true)}
           onOpenAiPlan={() => setAiPlanModalOpen(true)}
         />
