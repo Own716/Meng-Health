@@ -74,13 +74,14 @@ jobs:
 
       - name: Create GitHub Release & Upload APK
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
+        if: startsWith(github.ref, 'refs/tags/')
         with:
           tag_name: ${{ steps.release_tag.outputs.tag }}
           name: Meng Health ${{ steps.release_tag.outputs.tag }} 悬浮交互、设置中心与智能知识库升级版
           draft: false
           prerelease: false
           make_latest: true
+          fail_on_unmatched_files: true
           body: |
             ## Meng Health (梦健康) v1.4.0 悬浮交互、设置中心与智能知识库升级版 🥑
             
