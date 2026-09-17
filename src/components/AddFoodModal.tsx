@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Plus, Sparkles, Search } from 'lucide-react';
+import { X, Plus, Sparkles, Search, Camera } from 'lucide-react';
 import { FoodItem, MealType } from '../types/diet';
 
 interface AddFoodModalProps {
@@ -7,6 +7,7 @@ interface AddFoodModalProps {
   mealType: MealType;
   onClose: () => void;
   onAdd: (food: Omit<FoodItem, 'id'>) => void;
+  onOpenAiCamera?: (mealType: MealType) => void;
 }
 
 // 丰富常见中餐与健康减脂食物库（支持搜索与快速点击）
@@ -33,6 +34,7 @@ export const AddFoodModal: React.FC<AddFoodModalProps> = ({
   mealType,
   onClose,
   onAdd,
+  onOpenAiCamera,
 }) => {
   if (!isOpen) return null;
 
@@ -101,6 +103,26 @@ export const AddFoodModal: React.FC<AddFoodModalProps> = ({
             <X size={18} />
           </button>
         </div>
+
+        {/* 📸 快捷拍照/相册 AI 识别入口 */}
+        {onOpenAiCamera && (
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenAiCamera(mealType);
+              }}
+              className="w-full p-3 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 text-white font-bold text-xs flex items-center justify-between shadow-md shadow-sky-500/20 active:scale-[0.99] transition-all"
+            >
+              <span className="flex items-center gap-2">
+                <Camera size={16} className="text-amber-300" />
+                <span>📸 AI 拍照/相册识图并自动加入{mealNameMap[mealType]}</span>
+              </span>
+              <span className="text-[11px] bg-white/20 px-2 py-0.5 rounded-full font-semibold">去拍照 &gt;</span>
+            </button>
+          </div>
+        )}
 
         {/* 食物搜索框 */}
         <div className="my-3">

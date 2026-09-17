@@ -206,30 +206,47 @@ export async function testAiConnection(config: AiConfig): Promise<{ success: boo
 
 /**
  * 识别食物核心方法：优先使用真实 AI API；未配置 Key 时使用智能演示/规则识别
+ * 支持传入单张图片或多张图片数组 (多图多拍同时识别)
  */
 export async function identifyFood(input: {
   imageFile?: File;
   imageBase64?: string;
+  imageBase64List?: string[];
   textDescription?: string;
 }): Promise<AiFoodResult[]> {
   const config = getAiConfig();
 
-  // 1. 如果有图片，先进行前端压缩与黑屏亮度检查
-  let processedImage: string | undefined = undefined;
-  if (input.imageBase64) {
-    const avgBrightness = await checkImageBrightness(input.imageBase64);
-    if (avgBrightness < 25) {
+  // 整理多图列表
+  const rawImages: string[] = [];
+  if (input.imageBase64List && input.imageBase64List.length > 0) {
+    rawImages.push(...input.imageBase64List);
+  } else if (input.imageBase64) {
+    rawImages.push(input.imageBase64);
+  }
+
+  // 1. 如果有图片，逐张进行前端压缩与暗光黑屏检查
+  const processedImages: string[] = [];
+  if (rawImages.length > 0) {
+    let allTooDark = true;
+    for (const img of rawImages) {
+      const avgBrightness = await checkImageBrightness(img);
+      if (avgBrightness >= 25) {
+        allTooDark = false;
+      }
+      const compressed = await compressImageBase64(img, 1024, 0.75);
+      processedImages.push(compressed);
+    }
+
+    if (allTooDark) {
       throw new Error('拍摄画面过暗或全黑，未检测到任何食物！请在光线充足的环境下对准饭菜重新拍照。');
     }
-    // 压缩图片
-    processedImage = await compressImageBase64(input.imageBase64, 1024, 0.75);
   }
 
   // 2. 如果配置了有效 API Key，发起真实大模型请求
   if (config.apiKey && config.apiKey.trim().length > 5) {
     try {
       return await callRealAiApi(config, {
-        imageBase64: processedImage,
+        imageBase64List: processedImages,
         textDescription: input.textDescription
       });
     } catch (error: any) {
@@ -314,7 +331,7 @@ export async function identifyFood(input: {
   }
 
   // 如果仅上传了图片未配置 Key
-  if (processedImage && !desc) {
+  if (processedImages.length > 0 && !desc) {
     return [
       {
         foodName: '美味轻食组合餐',
@@ -350,12 +367,32 @@ export async function identifyFood(input: {
  */
 async function callRealAiApi(
   config: AiConfig,
-  input: { imageBase64?: string; textDescription?: string }
+  input: { imageBase64List?: string[]; imageBase64?: string; textDescription?: string }
 ): Promise<AiFoodResult[]> {
-  const prompt = `你是一位严谨专业的人类临床营养学家和减脂教练。
-请仔细识别分析图片中的食物或文字描述，识别出所有的菜品/食材，估算各食物的：克数(g)、热量(千卡/kcal)、蛋白质(克)、碳水化合物(克)、脂肪(克)。
+  const images = input.imageBase64List || (input.imageBase64 ? [input.imageBase64] : []);
+
+  const prompt = `你是一位精通中国饮食文化、各类中西家常菜、外卖快餐、带包装零食及现制茶饮的资深临床营养师与减脂教练。
+请仔细识别分析用户上传的一张或多张食物照片及文字描述，识别出所有的菜品、食材、零食、水果与饮品，精确估算克数(g)、热量(千卡/kcal)、蛋白质(克)、碳水化合物(克)、脂肪(克)。
+
+【常见中式外卖与餐盒规格参考】：
+- 标准长方形/圆形外卖塑料餐盒：装满米饭约 250-300g (约 300-350kcal)；单份炒菜净重通常在 250-350g；
+- 食堂标准不锈钢餐盘：单个菜格约 100-150g；普通家用中碗米饭约 150g (174kcal)。
+
+【现制奶茶与饮品规格参考 (蜜雪冰城/喜茶/茶百道/霸王茶姬等)】：
+- 中杯(约 500ml)：全糖普通奶茶约 360-450kcal，半糖约 260-320kcal，微糖/不另外加糖鲜奶茶约 180-220kcal；
+- 大杯(约 650-700ml)：全糖奶茶约 500-620kcal；
+- 常见加料热量：黑糖波霸珍珠一份(+110-130kcal)，芝士奶盖一份(+150-180kcal)，椰果/仙草一份(+40-50kcal)；
+- 经典果茶饮品：蜜雪冰城冰鲜柠檬水(大杯)约 150-180kcal。
+
+【常见带包装零食净含量与热量参考】：
+- 包装薯片/膨化食品：标准中袋 70g (约 380-390kcal)，小袋 30g (约 160kcal)；
+- 辣条类（如卫龙）：标准包约 65g (约 260-280kcal)，小包约 30g；
+- 坚果/每日坚果：独立小袋装标准净含量通常为 25g (约 145-155kcal)；
+- 饼干类：奥利奥单小包(3片)约 29g (140kcal)；
+- 吐司面包：单片全麦吐司约 35-40g (80-95kcal)。
+
 要求：
-1. 如果图片中没有食物、画面完全不相干或无法分辨，请严格返回空数组 []。
+1. 如果图片中完全没有食物、画面全黑或无法分辨，请严格返回空数组 []。
 2. 必须以纯 JSON 数组格式输出，绝对不要添加任何 markdown 代码块标记（不要写 \`\`\`json 也不要写 \`\`\`），不要附带任何前置或后置说明文字。
 3. 返回格式示例：
 [
@@ -385,8 +422,8 @@ async function callRealAiApi(
       const contents: any[] = [];
       const parts: any[] = [{ text: prompt }];
 
-      if (input.imageBase64) {
-        const base64Data = input.imageBase64.replace(/^data:image\/\w+;base64,/, '');
+      for (const img of images) {
+        const base64Data = img.replace(/^data:image\/\w+;base64,/, '');
         parts.push({
           inline_data: {
             mime_type: 'image/jpeg',
@@ -419,11 +456,8 @@ async function callRealAiApi(
 
       const messageContent: any[] = [];
 
-      if (input.imageBase64) {
-        const fullBase64 = input.imageBase64.startsWith('data:')
-          ? input.imageBase64
-          : `data:image/jpeg;base64,${input.imageBase64}`;
-
+      for (const img of images) {
+        const fullBase64 = img.startsWith('data:') ? img : `data:image/jpeg;base64,${img}`;
         messageContent.push({
           type: 'image_url',
           image_url: {

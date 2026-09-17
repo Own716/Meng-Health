@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Save, Database, Sparkles, Key } from 'lucide-react';
+import { X, Save, Sparkles, Check } from 'lucide-react';
 import { UserProfile } from '../types/diet';
 import { saveUserProfile } from '../services/storageService';
 
@@ -8,9 +8,7 @@ interface ProfileModalProps {
   profile: UserProfile;
   onClose: () => void;
   onUpdateProfile: (p: UserProfile) => void;
-  onOpenBackup: () => void;
   onOpenAiPlan?: () => void;
-  onOpenAiConfig?: () => void;
 }
 
 export const ProfileModal: React.FC<ProfileModalProps> = ({
@@ -18,23 +16,34 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   profile,
   onClose,
   onUpdateProfile,
-  onOpenBackup,
   onOpenAiPlan,
-  onOpenAiConfig,
 }) => {
   if (!isOpen) return null;
 
-  // 使用字符串状态，保证用户在退格删除时可以彻底清空，绝不会自动变成 0
-  const [nickname, setNickname] = useState(profile.nickname || '');
-  const [height, setHeight] = useState(profile.height ? String(profile.height) : '');
-  const [currentWeight, setCurrentWeight] = useState(profile.currentWeight ? String(profile.currentWeight) : '');
-  const [targetWeight, setTargetWeight] = useState(profile.targetWeight ? String(profile.targetWeight) : '');
-  const [dailyBudget, setDailyBudget] = useState(profile.dailyBudget ? String(profile.dailyBudget) : '');
-  const [targetProtein, setTargetProtein] = useState(profile.targetProtein ? String(profile.targetProtein) : '');
-  const [targetCarbs, setTargetCarbs] = useState(profile.targetCarbs ? String(profile.targetCarbs) : '');
-  const [targetFat, setTargetFat] = useState(profile.targetFat ? String(profile.targetFat) : '');
+  const [nickname, setNickname] = useState(profile.nickname || '梦梦');
+  const [gender, setGender] = useState<'female' | 'male'>(profile.gender || 'female');
+  const [age, setAge] = useState(String(profile.age || 25));
+  const [height, setHeight] = useState(profile.height ? String(profile.height) : '165');
+  const [currentWeight, setCurrentWeight] = useState(profile.currentWeight ? String(profile.currentWeight) : '58');
+  const [targetWeight, setTargetWeight] = useState(profile.targetWeight ? String(profile.targetWeight) : '52');
 
   const [savedTip, setSavedTip] = useState(false);
+
+  // 科学推导推荐摄入量 (Mifflin-St Jeor 基础代谢 + TDEE 轻活动 - 500kcal 减脂缺口)
+  const calcHeight = parseFloat(height) || 165;
+  const calcWeight = parseFloat(currentWeight) || 58;
+  const calcTarget = parseFloat(targetWeight) || 52;
+  const calcAge = parseInt(age) || 25;
+
+  const bmr = Math.round(
+    10 * calcWeight + 6.25 * calcHeight - 5 * calcAge + (gender === 'male' ? 5 : -161)
+  );
+  const tdee = Math.round(bmr * 1.375);
+  // 减脂期建议每日摄入量
+  const autoDailyBudget = Math.max(1200, tdee - 500);
+  const autoProtein = Math.round(calcWeight * 1.8);
+  const autoFat = Math.round((autoDailyBudget * 0.25) / 9);
+  const autoCarbs = Math.round((autoDailyBudget - autoProtein * 4 - autoFat * 9) / 4);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,13 +51,16 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     const updatedProfile: UserProfile = {
       ...profile,
       nickname: nickname.trim() || '梦梦',
-      height: parseFloat(height) || 165,
-      currentWeight: parseFloat(currentWeight) || 60,
-      targetWeight: parseFloat(targetWeight) || 55,
-      dailyBudget: parseInt(dailyBudget) || 2000,
-      targetProtein: parseInt(targetProtein) || 120,
-      targetCarbs: parseInt(targetCarbs) || 200,
-      targetFat: parseInt(targetFat) || 60,
+      gender,
+      age: calcAge,
+      height: calcHeight,
+      currentWeight: calcWeight,
+      targetWeight: calcTarget,
+      // 自动采用科学 AI 计划预算，用户无需手动填选复杂数字
+      dailyBudget: autoDailyBudget,
+      targetProtein: autoProtein,
+      targetCarbs: autoCarbs,
+      targetFat: autoFat,
     };
 
     saveUserProfile(updatedProfile);
@@ -57,17 +69,17 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     setTimeout(() => {
       setSavedTip(false);
       onClose();
-    }, 1000);
+    }, 900);
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm select-none animate-fadeIn">
-      <div className="w-full sm:max-w-md bg-white rounded-t-[32px] sm:rounded-3xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div className="w-full sm:max-w-md bg-white rounded-t-[32px] sm:rounded-3xl p-6 shadow-2xl max-h-[92vh] overflow-y-auto">
         {/* 顶部标题与关闭 */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <div>
-            <h3 className="text-base font-bold text-slate-900">个人身材与目标设置</h3>
-            <p className="text-[11px] text-slate-400">设置您的基本身体指标与每日热量预算</p>
+            <h3 className="text-base font-bold text-slate-900">修改个人身材与基础指标</h3>
+            <p className="text-[11px] text-slate-400">仅需填写身高体重，AI 将自动科学计算热量预算</p>
           </div>
           <button
             onClick={onClose}
@@ -77,75 +89,85 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           </button>
         </div>
 
-        {/* AI 智能测算入口横幅 */}
+        {/* AI 减脂计划联动入口 */}
         {onOpenAiPlan && (
-          <div className="my-3">
+          <div className="my-3.5">
             <button
               type="button"
               onClick={() => {
                 onClose();
                 onOpenAiPlan();
               }}
-              className="w-full p-3 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 text-white font-bold text-xs flex items-center justify-between shadow-md shadow-sky-500/20 active:scale-[0.99] transition-all"
+              className="w-full p-3.5 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 text-white font-bold text-xs flex items-center justify-between shadow-md shadow-sky-500/20 active:scale-[0.99] transition-all"
             >
               <span className="flex items-center gap-1.5">
                 <Sparkles size={16} className="text-amber-300" />
-                <span>AI 智能计算每日摄入量与摄出量 (推荐)</span>
+                <span>进入 AI 智能计算摄入量与摄出量 (生成计划)</span>
               </span>
-              <span className="text-[11px] bg-white/20 px-2 py-0.5 rounded-full">去测算 &gt;</span>
+              <span className="text-[11px] bg-white/20 px-2.5 py-0.5 rounded-full font-semibold">详细测算 &gt;</span>
             </button>
           </div>
         )}
-
-        {/* AI 模型与 Key 配置入口 */}
-        {onOpenAiConfig && (
-          <div className="mb-2.5">
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                onOpenAiConfig();
-              }}
-              className="w-full py-2.5 px-3.5 rounded-xl bg-sky-50 hover:bg-sky-100 border border-sky-200/80 text-sky-800 font-semibold text-xs flex items-center justify-between transition-colors"
-            >
-              <span className="flex items-center gap-2">
-                <Key size={14} className="text-sky-600" />
-                <span>AI 大模型接口与 API Key 设置</span>
-              </span>
-              <span className="text-[11px] text-sky-600 font-bold">智谱/通义/Gemini &gt;</span>
-            </button>
-          </div>
-        )}
-
-        {/* 备份中心入口 */}
-        <div className="mb-4">
-          <button
-            type="button"
-            onClick={() => {
-              onClose();
-              onOpenBackup();
-            }}
-            className="w-full py-2.5 px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200/80 border border-slate-200/60 text-slate-700 font-semibold text-xs flex items-center justify-between transition-colors"
-          >
-            <span className="flex items-center gap-2">
-              <Database size={14} className="text-emerald-600" />
-              <span>数据备份与换机迁移中心</span>
-            </span>
-            <span className="text-[11px] text-slate-400">导出/恢复 JSON &gt;</span>
-          </button>
-        </div>
 
         <form onSubmit={handleSubmit} className="space-y-3.5">
+          {/* 昵称与性别 */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                昵称
+                称呼昵称
               </label>
               <input
                 type="text"
-                placeholder="请输入昵称"
+                placeholder="梦梦"
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:bg-white focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                生理性别
+              </label>
+              <div className="grid grid-cols-2 gap-1.5 p-0.5 bg-slate-100 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setGender('female')}
+                  className={`py-1.5 text-xs font-bold rounded-lg transition-all ${
+                    gender === 'female'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-slate-500'
+                  }`}
+                >
+                  女生
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGender('male')}
+                  className={`py-1.5 text-xs font-bold rounded-lg transition-all ${
+                    gender === 'male'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-slate-500'
+                  }`}
+                >
+                  男生
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* 年龄与身高 */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                年龄 (岁)
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="25"
+                value={age}
+                onChange={(e) => setAge(e.target.value)}
                 className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:bg-white focus:border-blue-500"
               />
             </div>
@@ -156,7 +178,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               <input
                 type="text"
                 inputMode="decimal"
-                placeholder="例如 165"
+                placeholder="165"
                 value={height}
                 onChange={(e) => setHeight(e.target.value)}
                 className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:bg-white focus:border-blue-500"
@@ -164,6 +186,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             </div>
           </div>
 
+          {/* 当前体重与目标体重 */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -172,10 +195,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               <input
                 type="text"
                 inputMode="decimal"
-                placeholder="例如 58"
+                placeholder="58"
                 value={currentWeight}
                 onChange={(e) => setCurrentWeight(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:bg-white focus:border-blue-500 font-bold text-slate-800"
+                className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:bg-white focus:border-blue-500 font-bold text-slate-900"
               />
             </div>
             <div>
@@ -185,7 +208,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               <input
                 type="text"
                 inputMode="decimal"
-                placeholder="例如 52"
+                placeholder="52"
                 value={targetWeight}
                 onChange={(e) => setTargetWeight(e.target.value)}
                 className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:bg-white focus:border-emerald-500 font-bold text-emerald-600"
@@ -193,68 +216,47 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              每日总摄入热量预算 (千卡/kcal)
-            </label>
-            <input
-              type="text"
-              inputMode="numeric"
-              placeholder="例如 2000"
-              value={dailyBudget}
-              onChange={(e) => setDailyBudget(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-black text-blue-600 focus:bg-white focus:border-blue-500"
-            />
-          </div>
-
-          {/* 目标三大营养素 */}
-          <div className="pt-2 border-t border-slate-100">
-            <span className="block text-xs font-semibold text-slate-600 mb-2">
-              每日三大营养素目标 (克/g)
-            </span>
-            <div className="grid grid-cols-3 gap-2">
+          {/* 自动科学计算出的摄入与营养卡片 (无需用户手动选择) */}
+          <div className="mt-2 p-3.5 rounded-2xl bg-sky-50/70 border border-sky-200/60 text-xs space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-sky-950 flex items-center gap-1">
+                <Sparkles size={14} className="text-sky-600" />
+                <span>AI 智能测算每日摄入量与营养计划</span>
+              </span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-200/60 text-sky-800 font-bold">
+                智能自适应
+              </span>
+            </div>
+            <div className="bg-white p-3 rounded-xl border border-sky-100 shadow-sm flex items-center justify-between">
               <div>
-                <label className="block text-[11px] text-slate-400 mb-1">蛋白质(g)</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="120"
-                  value={targetProtein}
-                  onChange={(e) => setTargetProtein(e.target.value)}
-                  className="w-full px-2.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-center"
-                />
+                <span className="text-[11px] text-slate-400 block">建议今日最多摄入</span>
+                <span className="text-xl font-black text-blue-600">{autoDailyBudget} <span className="text-xs font-semibold text-slate-500">千卡</span></span>
               </div>
-              <div>
-                <label className="block text-[11px] text-slate-400 mb-1">碳水(g)</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="200"
-                  value={targetCarbs}
-                  onChange={(e) => setTargetCarbs(e.target.value)}
-                  className="w-full px-2.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-center"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] text-slate-400 mb-1">脂肪(g)</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="60"
-                  value={targetFat}
-                  onChange={(e) => setTargetFat(e.target.value)}
-                  className="w-full px-2.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-center"
-                />
+              <div className="text-right text-[11px] text-slate-500 space-y-0.5">
+                <div>蛋白质 <strong>{autoProtein}g</strong></div>
+                <div>碳水 <strong>{autoCarbs}g</strong> · 脂肪 <strong>{autoFat}g</strong></div>
               </div>
             </div>
+            <p className="text-[10px] text-slate-400 leading-relaxed">
+              * 依据国际 Mifflin-St Jeor 基础代谢公式与每日健康安全减脂缺口智能测算，点击保存自动生效。
+            </p>
           </div>
 
           <button
             type="submit"
             className="w-full mt-4 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 active:scale-[0.99] transition-all flex items-center justify-center gap-1.5"
           >
-            <Save size={16} />
-            <span>{savedTip ? '保存成功！' : '保存个人设置'}</span>
+            {savedTip ? (
+              <>
+                <Check size={16} />
+                <span>已保存并应用 AI 减脂计划！</span>
+              </>
+            ) : (
+              <>
+                <Save size={16} />
+                <span>保存身体指标并自动应用计划</span>
+              </>
+            )}
           </button>
         </form>
       </div>

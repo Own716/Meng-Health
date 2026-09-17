@@ -51,17 +51,17 @@ jobs:
       - name: Prepare and Verify APK Signature
         run: |
           mkdir -p release-apk
-          cp android/app/build/outputs/apk/debug/app-debug.apk release-apk/Meng-Health-v1.3.0.apk
-          echo "APK generated successfully at release-apk/Meng-Health-v1.3.0.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk release-apk/Meng-Health-v1.4.0.apk
+          echo "APK generated successfully at release-apk/Meng-Health-v1.4.0.apk"
           ls -lh release-apk/
           echo "=== 正在校验 APK 签名证书指纹 (确保与永久密钥 menghealth.keystore 一致) ==="
-          keytool -printcert -jarfile release-apk/Meng-Health-v1.3.0.apk
+          keytool -printcert -jarfile release-apk/Meng-Health-v1.4.0.apk
 
       - name: Upload APK as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Meng-Health-v1.3.0-APK
-          path: release-apk/Meng-Health-v1.3.0.apk
+          name: Meng-Health-v1.4.0-APK
+          path: release-apk/Meng-Health-v1.4.0.apk
 
       - name: Determine Release Tag
         id: release_tag
@@ -69,7 +69,7 @@ jobs:
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           else
-            echo "tag=v1.3.0" >> $GITHUB_OUTPUT
+            echo "tag=v1.4.0" >> $GITHUB_OUTPUT
           fi
 
       - name: Create GitHub Release & Upload APK
@@ -77,24 +77,28 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
         with:
           tag_name: ${{ steps.release_tag.outputs.tag }}
-          name: Meng Health ${{ steps.release_tag.outputs.tag }} 视觉大模型与永久签名重构版
+          name: Meng Health ${{ steps.release_tag.outputs.tag }} 悬浮交互、设置中心与智能知识库升级版
           draft: false
           prerelease: false
           make_latest: true
           body: |
-            ## Meng Health (梦健康) v1.3.0 视觉大模型与永久签名重构版 🥑
+            ## Meng Health (梦健康) v1.4.0 悬浮交互、设置中心与智能知识库升级版 🥑
             
-            ### 🛠️ 本次核心重构与修复：
-            1. 🤖 **彻底修复智谱 AI 视觉识别 (401 错误与兼容性)**：重构底层请求协议，完全适配智谱清言 (BigModel `glm-4v-flash`) 及标准 OpenAI 兼容多模态接口规范，自动附加 `Authorization: Bearer` 鉴权头。
-            2. ⚡ **前端 Canvas 毫秒级图片压缩 (解决卡死与无限转圈)**：手机相机拍摄的 5MB~10MB 高清原图在上传前自动压制至最长边 1024px，体积骤降 98% (~100KB)，上传与解析响应仅需 1~2 秒！
-            3. 🔐 **固化永久签名密钥 (解决每次更新需卸载旧版的问题)**：正式植入独立永久证书 `menghealth.keystore`（有效期至 2054 年），彻底终结 Android 系统“签名不一致导致无法覆盖更新”的历史问题！
-            4. ⚙️ **独立「AI 接口配置中心」**：支持一键切换预设（智谱 GLM-4V-Flash 永久免费版、阿里云通义千问、Google Gemini 等），支持**一键网络连通性测试**，数据 100% 保存在手机本地。
-            5. 💡 **智能容错与暗光拦截**：拍摄暗光/全黑照片智能拦截提醒，大模型返回解析支持任意杂乱说明自动提取精准 JSON 数组。
+            ### 🌟 本次核心升级与全新特性：
+            1. 🎨 **悬浮底栏双层物理景深光影**：为浮动导航栏注入双层阴影与微光轮廓（`shadow-[0_16px_36px...] ring-1`），在上下滑动页面时形成自然分明的上下层空间景深，彻底告别平面贴图感！
+            2. ⚙️ **全新「系统综合设置」抽屉**：将 AI 接口配置、大模型 Key、数据备份迁移、喝水/用餐提醒、热量预警与缓存清理统一归集至设置中心。
+            3. 👤 **“我的”个人主页重塑**：剔除冗余复杂配置，仅保留两大最核心功能：
+               - ✨ **AI 智能计算摄入量与摄出量**（基于身体代谢算法智能测算并一键生效）
+               - 👤 **修改个人身材与基础热量**（纯净身材数据管理，自动联动推荐）
+               - ⚙️ **系统综合设置**（位于主页底端独立收纳）
+            4. 📷 **相册跳转修复 & 多图并发识别**：彻底解决点击相册却误唤起相机的 Bug。正式分离“📷 现场拍照”与“🖼️ 从相册选择”，相册支持多选照片，拍照支持连续加拍多道菜品，横向缩略条支持快速删除并由 AI 综合分析。
+            5. 🧋 **本土零食与品牌奶茶知识库升级**：大模型提示词深度内嵌中国常见零食标准（卫龙辣条 65g、乐事薯片 70g、奥利奥 29g 等）与网红奶茶规格（蜜雪冰城/喜茶/霸王茶姬 500ml/650ml，加珍珠波霸/加奶盖热量加权计算），外卖餐盒自动根据 500ml/750ml/1000ml 标准换算食物密度。
+            6. ⭕ **能量圆环直观文案**：首页预算文字更正为更易懂的「今日最多摄入量」。
+            7. 📈 **7 天动态折线走势图**：趋势页新增交互式平滑 SVG 折线图与渐变填充面积图，搭配目标摄入虚线对照与体重曲线。
+            8. ⚡ **四餐拍照快捷入口**：早餐、午餐、晚餐、加餐卡片与食物弹窗新增相机快捷按钮，一键拍摄直达对应餐别。
+            9. 🔐 **100% 保持 v1.3.0 永久签名 (menghealth.keystore)**：无需卸载旧版，可在已有 v1.3.0 基础上直接点击 APK 覆盖更新！
             
-            ### 📲 安装升级指引：
-            - **关于覆盖更新**：由于之前各测试版均由 GitHub Actions 临时随机签名，本次 v1.3.0 为**永久签名基准版本**。若您当前手机已安装旧版并提示签名不一致，请先在旧版中点击「数据备份」导出 JSON，卸载旧版并安装本次 **`Meng-Health-v1.3.0.apk`** 后点击导入恢复；**从此以后，所有后续版本（v1.4.0+）均可无缝直接覆盖安装，绝无需再卸载！**
-            
-            请在下方 **Assets** 列表中下载 **`Meng-Health-v1.3.0.apk`** 体验！
-          files: release-apk/Meng-Health-v1.3.0.apk
+            请在下方 **Assets** 列表中下载 **`Meng-Health-v1.4.0.apk`** 体验！
+          files: release-apk/Meng-Health-v1.4.0.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

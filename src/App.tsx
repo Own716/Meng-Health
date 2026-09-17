@@ -12,9 +12,10 @@ import { BackupModal } from './components/BackupModal';
 import { CalendarModal } from './components/CalendarModal';
 import { AiPlanModal } from './components/AiPlanModal';
 import { AiConfigModal } from './components/AiConfigModal';
+import { SettingsModal } from './components/SettingsModal';
 import { JournalView } from './components/JournalView';
 import { ProgressView } from './components/ProgressView';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, Settings, Sparkles, User, ChevronRight } from 'lucide-react';
 import {
   getTodayString,
   getDayLog,
@@ -51,6 +52,7 @@ export function App() {
   const [calendarModalOpen, setCalendarModalOpen] = useState(false);
   const [aiPlanModalOpen, setAiPlanModalOpen] = useState(false);
   const [aiConfigModalOpen, setAiConfigModalOpen] = useState(false);
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
 
   // 当切换日期时，加载对应日期的记录
   useEffect(() => {
@@ -207,6 +209,10 @@ export function App() {
                   setAddFoodModalOpen(true);
                 }}
                 onDeleteFood={handleDeleteFood}
+                onCameraFood={(m) => {
+                  setActiveMealType(m);
+                  setAiModalOpen(true);
+                }}
               />
             </div>
           )}
@@ -224,6 +230,10 @@ export function App() {
                   setAddFoodModalOpen(true);
                 }}
                 onDeleteFood={handleDeleteFood}
+                onCameraFood={(m) => {
+                  setActiveMealType(m);
+                  setAiModalOpen(true);
+                }}
               />
             </div>
           )}
@@ -240,13 +250,14 @@ export function App() {
           {activeTab === 'progress' && <ProgressView profile={profile} />}
 
           {activeTab === 'profile' && (
-            <div className="px-5 pt-3 pb-28 space-y-4">
+            <div className="px-5 pt-3 pb-28 space-y-3.5">
+              {/* 用户信息卡片 */}
               <div className="p-5 rounded-3xl bg-white border border-slate-100 shadow-sm text-center">
                 <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-black text-xl flex items-center justify-center mx-auto mb-2 shadow-md shadow-blue-400/30">
-                  {profile.nickname.substring(0, 1) || '梦'}
+                  {profile.nickname?.substring(0, 1) || '梦'}
                 </div>
-                <h3 className="font-bold text-base text-slate-900">梦梦</h3>
-                <p className="text-xs text-slate-400 mt-0.5">Hi, 梦梦 · 坚持记录，遇见更好的自己</p>
+                <h3 className="font-bold text-base text-slate-900">{profile.nickname || '梦梦'}</h3>
+                <p className="text-xs text-slate-400 mt-0.5">Hi, {profile.nickname || '梦梦'} · 坚持记录，遇见更好的自己</p>
                 <div className="mt-4 flex justify-center gap-4 text-xs text-slate-600 border-t border-slate-100 pt-3">
                   <div>身高 <span className="font-bold text-slate-800">{profile.height}</span> cm</div>
                   <div>当前 <span className="font-bold text-slate-800">{profile.currentWeight}</span> kg</div>
@@ -254,41 +265,56 @@ export function App() {
                 </div>
               </div>
 
-              {/* AI 智能计划入口 */}
+              {/* 选项 (a): AI 智能计算摄入量与摄出量 */}
               <button
                 onClick={() => setAiPlanModalOpen(true)}
-                className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 text-white text-xs font-bold text-left flex justify-between items-center shadow-md shadow-blue-500/20 active:scale-[0.99] transition-all"
+                className="w-full p-4 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-500 text-white text-left flex justify-between items-center shadow-md shadow-blue-500/20 active:scale-[0.99] transition-all group"
               >
-                <span>✨ AI 智能计算摄入量与摄出量 (生成计划)</span>
-                <span>去测算 &gt;</span>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                    <Sparkles size={20} className="text-white" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold">AI 智能计算摄入量与摄出量</div>
+                    <div className="text-[11px] text-blue-100 font-normal mt-0.5">基于代谢算法与减脂周期智能测算</div>
+                  </div>
+                </div>
+                <ChevronRight size={18} className="text-white/80 group-hover:translate-x-0.5 transition-transform" />
               </button>
 
-              {/* AI 模型与 Key 配置入口 */}
-              <button
-                onClick={() => setAiConfigModalOpen(true)}
-                className="w-full py-3.5 px-4 rounded-2xl bg-sky-50 hover:bg-sky-100 border border-sky-200 text-xs font-bold text-sky-900 text-left flex justify-between items-center shadow-sm"
-              >
-                <span>🤖 AI 视觉大模型接口与 API Key 设置</span>
-                <span className="text-sky-600 font-bold">智谱/通义/Gemini &gt;</span>
-              </button>
-
-              {/* 快捷进入目标修改 */}
+              {/* 选项 (b): 修改个人身材与基础热量 */}
               <button
                 onClick={() => setProfileModalOpen(true)}
-                className="w-full py-3.5 px-4 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 text-left flex justify-between items-center shadow-sm"
+                className="w-full p-4 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200/80 text-left flex justify-between items-center shadow-sm active:scale-[0.99] transition-all group"
               >
-                <span>修改个人身材与基础热量</span>
-                <span className="text-slate-400">&gt;</span>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <User size={20} />
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-slate-800">修改个人身材与基础热量</div>
+                    <div className="text-[11px] text-slate-400 font-normal mt-0.5">身高、当前体重、目标体重与基础代谢</div>
+                  </div>
+                </div>
+                <ChevronRight size={18} className="text-slate-400 group-hover:translate-x-0.5 transition-transform" />
               </button>
 
-              {/* 快捷进入备份中心 */}
-              <button
-                onClick={() => setBackupModalOpen(true)}
-                className="w-full py-3.5 px-4 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold text-left flex justify-between items-center shadow-md shadow-emerald-500/20"
-              >
-                <span>数据备份与换机导出中心</span>
-                <span>立即进入 &gt;</span>
-              </button>
+              {/* 页面最下方：系统综合设置选项 */}
+              <div className="pt-2">
+                <button
+                  onClick={() => setSettingsModalOpen(true)}
+                  className="w-full py-3.5 px-4 rounded-2xl bg-slate-100 hover:bg-slate-200/80 text-slate-700 text-left flex justify-between items-center transition-all group"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Settings size={17} className="text-slate-500 group-hover:rotate-45 transition-transform duration-300" />
+                    <span className="text-xs font-bold text-slate-700">系统综合设置</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-slate-400">
+                    <span className="text-[11px]">AI大模型接口 / 备份 / 偏好</span>
+                    <ChevronRight size={14} />
+                  </div>
+                </button>
+              </div>
             </div>
           )}
         </main>
@@ -302,11 +328,17 @@ export function App() {
           mealType={activeMealType}
           onClose={() => setAddFoodModalOpen(false)}
           onAdd={handleAddFood}
+          onOpenAiCamera={(m) => {
+            setActiveMealType(m);
+            setAddFoodModalOpen(false);
+            setAiModalOpen(true);
+          }}
         />
 
         {/* ✨ AI 智能拍照速记弹窗 */}
         <AiLogModal
           isOpen={aiModalOpen}
+          initialMealType={activeMealType}
           onClose={() => setAiModalOpen(false)}
           onAddAiFood={handleAddAiFoods}
           onOpenAiConfig={() => setAiConfigModalOpen(true)}
@@ -337,9 +369,10 @@ export function App() {
           profile={profile}
           onClose={() => setProfileModalOpen(false)}
           onUpdateProfile={handleUpdateProfile}
-          onOpenBackup={() => setBackupModalOpen(true)}
-          onOpenAiPlan={() => setAiPlanModalOpen(true)}
-          onOpenAiConfig={() => setAiConfigModalOpen(true)}
+          onOpenAiPlan={() => {
+            setProfileModalOpen(false);
+            setAiPlanModalOpen(true);
+          }}
         />
 
         {/* 数据备份与换机迁移弹窗 */}
@@ -355,6 +388,21 @@ export function App() {
           isOpen={aiConfigModalOpen}
           onClose={() => setAiConfigModalOpen(false)}
           onConfigSaved={() => showToast('AI 接口配置已成功保存生效！')}
+        />
+
+        {/* ⚙️ 系统综合设置弹窗 */}
+        <SettingsModal
+          isOpen={settingsModalOpen}
+          onClose={() => setSettingsModalOpen(false)}
+          onOpenAiConfig={() => {
+            setSettingsModalOpen(false);
+            setAiConfigModalOpen(true);
+          }}
+          onOpenBackup={() => {
+            setSettingsModalOpen(false);
+            setBackupModalOpen(true);
+          }}
+          onClearCache={() => showToast('本地临时缓存已成功清理！')}
         />
       </div>
     </div>

@@ -36,6 +36,7 @@ export interface DayLog {
 export interface UserProfile {
   nickname: string;
   gender: 'male' | 'female';
+  age?: number;
   height: number; // cm
   currentWeight: number; // kg
   targetWeight: number;  // kg

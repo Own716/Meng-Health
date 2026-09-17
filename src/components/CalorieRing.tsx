@@ -79,14 +79,14 @@ export const CalorieRing: React.FC<CalorieRingProps> = ({
         </div>
       </div>
 
-      {/* 圆环正下方的辅助信息卡片：独立于圆环外部，绝对不重叠 */}
-      <div className="flex items-center justify-center gap-4 mt-2 px-4 py-1.5 rounded-full bg-slate-100/80 text-xs font-medium text-slate-600">
+      {/* 圆环正下方的辅助信息卡片：今日最多摄入量与今日已摄入 */}
+      <div className="flex items-center justify-center gap-4 mt-2 px-4 py-1.5 rounded-full bg-slate-100/90 text-xs font-semibold text-slate-700 shadow-sm border border-slate-200/50">
         <div>
-          每日摄入预算: <span className="font-bold text-slate-900">{budget}</span> 千卡
+          今日最多摄入量: <span className="font-black text-slate-900">{budget}</span> 千卡
         </div>
-        <div className="w-[1px] h-3 bg-slate-300" />
+        <div className="w-[1px] h-3.5 bg-slate-300" />
         <div>
-          今日已摄入: <span className="font-bold text-blue-600">{consumed}</span> 千卡
+          今日已摄入: <span className="font-black text-blue-600">{consumed}</span> 千卡
         </div>
       </div>
     </div>

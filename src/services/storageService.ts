@@ -6,6 +6,7 @@ const LOGS_KEY = 'meng_health_day_logs';
 export const DEFAULT_PROFILE: UserProfile = {
   nickname: '梦梦',
   gender: 'female',
+  age: 25,
   height: 165,
   currentWeight: 58.5,
   targetWeight: 52.0,

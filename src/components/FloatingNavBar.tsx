@@ -22,8 +22,8 @@ export const FloatingNavBar: React.FC<FloatingNavBarProps> = ({
 
   return (
     <div className="fixed bottom-6 inset-x-0 flex justify-center z-40 px-6 pointer-events-none select-none">
-      {/* 悬浮胶囊底栏 */}
-      <nav className="pointer-events-auto flex items-center justify-between w-full max-w-sm px-4 py-2.5 rounded-full bg-white/75 backdrop-blur-xl border border-white/80 shadow-2xl shadow-slate-300/60 transition-all duration-300">
+      {/* 悬浮胶囊底栏：双层物理高悬浮阴影与超强立体景深 */}
+      <nav className="pointer-events-auto flex items-center justify-between w-full max-w-sm px-4 py-2.5 rounded-full bg-white/85 backdrop-blur-2xl border border-white/90 shadow-[0_16px_36px_-6px_rgba(15,23,42,0.22),0_6px_16px_-4px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/5 transition-all duration-300">
         {navItems.map(({ key, label, icon: Icon }) => {
           const isActive = activeTab === key;
           return (

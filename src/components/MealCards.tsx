@@ -1,17 +1,19 @@
 import React from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Camera } from 'lucide-react';
 import { DayLog, MealType } from '../types/diet';
 
 interface MealCardsProps {
   dayLog: DayLog;
   onAddFood: (mealType: MealType) => void;
   onDeleteFood: (mealType: MealType, foodId: string) => void;
+  onCameraFood?: (mealType: MealType) => void;
 }
 
 export const MealCards: React.FC<MealCardsProps> = ({
   dayLog,
   onAddFood,
   onDeleteFood,
+  onCameraFood,
 }) => {
   const mealSections: { type: MealType; title: string }[] = [
     { type: 'breakfast', title: '早餐' },
@@ -78,18 +80,31 @@ export const MealCards: React.FC<MealCardsProps> = ({
               )}
             </div>
 
-            {/* 底部热量统计与添加按钮 */}
+            {/* 底部热量统计与快捷添加/拍照按钮 */}
             <div className="flex items-center justify-between pt-2 border-t border-slate-50 mt-auto">
               <span className="text-xs font-semibold text-slate-700">
                 {hasItems ? `${meal.totalCalories} 千卡` : '0 千卡'}
               </span>
-              <button
-                onClick={() => onAddFood(type)}
-                className="w-7 h-7 rounded-full bg-slate-50 hover:bg-slate-100 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors active:scale-95"
-                title={`添加${title}`}
-              >
-                <Plus size={16} />
-              </button>
+              <div className="flex items-center gap-1.5">
+                {onCameraFood && (
+                  <button
+                    type="button"
+                    onClick={() => onCameraFood(type)}
+                    className="w-7 h-7 rounded-full bg-sky-50 hover:bg-sky-100 flex items-center justify-center text-sky-600 transition-colors active:scale-95"
+                    title={`拍照识别${title}`}
+                  >
+                    <Camera size={14} />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => onAddFood(type)}
+                  className="w-7 h-7 rounded-full bg-slate-50 hover:bg-slate-100 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors active:scale-95"
+                  title={`手动添加${title}`}
+                >
+                  <Plus size={16} />
+                </button>
+              </div>
             </div>
           </div>
         );
