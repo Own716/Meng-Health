@@ -51,15 +51,15 @@ jobs:
       - name: Prepare APK Output
         run: |
           mkdir -p release-apk
-          cp android/app/build/outputs/apk/debug/app-debug.apk release-apk/Meng-Health-v1.0.0.apk
-          echo "APK generated successfully at release-apk/Meng-Health-v1.0.0.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk release-apk/Meng-Health-v1.1.0.apk
+          echo "APK generated successfully at release-apk/Meng-Health-v1.1.0.apk"
           ls -lh release-apk/
 
       - name: Upload APK as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Meng-Health-v1.0.0-APK
-          path: release-apk/Meng-Health-v1.0.0.apk
+          name: Meng-Health-v1.1.0-APK
+          path: release-apk/Meng-Health-v1.1.0.apk
 
       - name: Determine Release Tag
         id: release_tag
@@ -67,7 +67,7 @@ jobs:
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           else
-            echo "tag=v1.0.0" >> $GITHUB_OUTPUT
+            echo "tag=v1.1.0" >> $GITHUB_OUTPUT
           fi
 
       - name: Create GitHub Release & Upload APK
@@ -75,23 +75,23 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
         with:
           tag_name: ${{ steps.release_tag.outputs.tag }}
-          name: Meng Health ${{ steps.release_tag.outputs.tag }} 安装包发布
+          name: Meng Health ${{ steps.release_tag.outputs.tag }} 体验优化与问题修复版
           draft: false
           prerelease: false
           make_latest: true
           body: |
-            ## Meng Health (萌健康) 安装包已生成 🥑
+            ## Meng Health (萌健康) v1.1.0 体验修复与升级版 🥑
             
-            ### ✨ 功能亮点：
-            - 🥑 **全中文优雅 UI**：像素级还原设计图，纯正中文界面，无生硬英文。
-            - 🎯 **热量预算仪表环**：动态计算今日剩余可吃千卡，一眼看清卡路里缺口。
-            - 🥗 **三大营养素追踪**：蛋白质、碳水化合物、脂肪专属三色进度条。
-            - ✨ **AI 智能速记卡片**：支持拍照估算与语言文字快速记餐，预留大模型 API 接口。
-            - 📱 **iOS 16 悬浮毛玻璃底栏**：半透明高斯模糊质感，五大模块随心切换。
-            - 💾 **数据备份与导出**：纯本地隐私存储，一键导出 JSON 备份文件，换手机零担忧。
+            ### 🛠️ 本次核心修复与优化：
+            1. 📊 **AI 智能计算摄入量与摄出量**：根据当前体重、目标体重与活动量，智能测算 TDEE 每日总消耗、建议摄入量、三大营养素分配与减脂周期，支持一键应用！
+            2. 🎯 **彻底解决 UI 文字与圆环重叠**：修复能量圆环底部文字被进度线条切分重叠的问题，排版清爽清晰。
+            3. ✏️ **修复体重与数值输入框“0 删不掉”问题**：删除数字不再被强制重置为 0，支持自由退格输入自己的真实数据。
+            4. 📱 **修复手机手势底栏泛白问题**：Android 原生导航栏背景深度融入 App 背景色，彻底消除白色底条割裂感。
+            5. 🗓️ **日期切换丝滑升级**：改为稳固周视图滑动高亮，告别跳变闪烁；新增**下拉展开全月日历**，方便跨月挑选查看。
+            6. 🔍 **丰富减脂食物库与即时搜索**：支持在添加食物时按名称/标签快速搜索。
             
-            ### 📲 安装指引：
-            在下方 **Assets** 列表中下载 **`Meng-Health-v1.0.0.apk`** 直接安装在安卓手机上即可使用！
-          files: release-apk/Meng-Health-v1.0.0.apk
+            ### 📲 下载安装：
+            请在下方 **Assets** 列表中下载 **`Meng-Health-v1.1.0.apk`** 直接安装体验！
+          files: release-apk/Meng-Health-v1.1.0.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

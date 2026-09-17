@@ -9,12 +9,15 @@ import { AddFoodModal } from './components/AddFoodModal';
 import { AiLogModal } from './components/AiLogModal';
 import { ProfileModal } from './components/ProfileModal';
 import { BackupModal } from './components/BackupModal';
+import { CalendarModal } from './components/CalendarModal';
+import { AiPlanModal } from './components/AiPlanModal';
 import { JournalView } from './components/JournalView';
 import { ProgressView } from './components/ProgressView';
 import {
   getTodayString,
   getDayLog,
   getUserProfile,
+  saveUserProfile,
   addFoodToMeal,
   removeFoodFromMeal,
 } from './services/storageService';
@@ -32,6 +35,8 @@ export function App() {
   const [aiModalOpen, setAiModalOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [backupModalOpen, setBackupModalOpen] = useState(false);
+  const [calendarModalOpen, setCalendarModalOpen] = useState(false);
+  const [aiPlanModalOpen, setAiPlanModalOpen] = useState(false);
 
   // 当切换日期时，加载对应日期的记录
   useEffect(() => {
@@ -40,7 +45,8 @@ export function App() {
 
   // 重新加载所有数据（导入备份或修改设置后）
   const handleReloadAll = () => {
-    setProfile(getUserProfile());
+    const p = getUserProfile();
+    setProfile(p);
     setDayLog(getDayLog(currentDate));
   };
 
@@ -63,6 +69,26 @@ export function App() {
   const handleDeleteFood = (mealType: MealType, foodId: string) => {
     const updated = removeFoodFromMeal(currentDate, mealType, foodId);
     setDayLog({ ...updated });
+  };
+
+  // 应用 AI 智能测算出的减脂方案
+  const handleApplyAiPlan = (newBudget: number, protein: number, carbs: number, fat: number) => {
+    const updated: UserProfile = {
+      ...profile,
+      dailyBudget: newBudget,
+      targetProtein: protein,
+      targetCarbs: carbs,
+      targetFat: fat,
+    };
+    saveUserProfile(updated);
+    setProfile(updated);
+    // 同时更新当天的预算指标
+    const log = getDayLog(currentDate);
+    log.budgetCalories = newBudget;
+    log.targetProtein = protein;
+    log.targetCarbs = carbs;
+    log.targetFat = fat;
+    setDayLog({ ...log });
   };
 
   // 计算今日三大营养素总和
@@ -89,7 +115,6 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex justify-center selection:bg-blue-100">
-      {/* 限制移动端容器宽度 */}
       <div className="w-full max-w-md min-h-screen flex flex-col bg-slate-50 relative pb-safe">
         {/* 顶部导航栏 */}
         <Header
@@ -99,17 +124,17 @@ export function App() {
             setActiveTab('home');
           }}
           onOpenProfile={() => setProfileModalOpen(true)}
+          onOpenCalendar={() => setCalendarModalOpen(true)}
         />
 
-        {/* 页面内容切换 */}
-        <main className="flex-1 overflow-y-auto">
+        {/* 页面内容主体：切换日期时带平滑淡入动效 */}
+        <main key={currentDate + activeTab} className="flex-1 overflow-y-auto animate-fadeIn transition-opacity duration-300">
           {activeTab === 'home' && (
-            <div className="animate-fadeIn">
-              {/* 核心能量圆环 */}
+            <div>
+              {/* 核心能量圆环 (已彻底修复文字与线条重叠 Bug) */}
               <CalorieRing
                 budget={dayLog.budgetCalories || profile.dailyBudget}
                 consumed={dayLog.consumedCalories}
-                stageGoal={1650}
               />
 
               {/* 三大营养素进度条 */}
@@ -119,8 +144,11 @@ export function App() {
                 fat={macros.fat}
               />
 
-              {/* ✨ AI 智能速记卡片 */}
-              <AiSmartLogCard onOpenAiLog={() => setAiModalOpen(true)} />
+              {/* ✨ AI 智能速记卡片 & 计划测算入口 */}
+              <AiSmartLogCard
+                onOpenAiLog={() => setAiModalOpen(true)}
+                onOpenAiPlan={() => setAiPlanModalOpen(true)}
+              />
 
               {/* 四餐记录卡片列表 */}
               <MealCards
@@ -135,9 +163,9 @@ export function App() {
           )}
 
           {activeTab === 'meals' && (
-            <div className="animate-fadeIn pt-2">
-              <div className="px-5 mb-3 flex items-center justify-between">
-                <h2 className="text-lg font-bold text-slate-900">今日餐次明细</h2>
+            <div className="pt-2 px-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-base font-bold text-slate-900">今日餐次与食物记录</h2>
                 <span className="text-xs text-slate-400">已摄入 {dayLog.consumedCalories} 千卡</span>
               </div>
               <MealCards
@@ -163,7 +191,7 @@ export function App() {
           {activeTab === 'progress' && <ProgressView profile={profile} />}
 
           {activeTab === 'profile' && (
-            <div className="px-5 pt-3 pb-28 animate-fadeIn space-y-4">
+            <div className="px-5 pt-3 pb-28 space-y-4">
               <div className="p-5 rounded-3xl bg-white border border-slate-100 shadow-sm text-center">
                 <div className="w-16 h-16 rounded-full bg-blue-600 text-white font-black text-xl flex items-center justify-center mx-auto mb-2 shadow-md shadow-blue-400/30">
                   {profile.nickname.substring(0, 1)}
@@ -177,12 +205,21 @@ export function App() {
                 </div>
               </div>
 
+              {/* AI 智能计划入口 */}
+              <button
+                onClick={() => setAiPlanModalOpen(true)}
+                className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 text-white text-xs font-bold text-left flex justify-between items-center shadow-md shadow-blue-500/20 active:scale-[0.99] transition-all"
+              >
+                <span>✨ AI 智能计算摄入量与摄出量 (生成计划)</span>
+                <span>去测算 &gt;</span>
+              </button>
+
               {/* 快捷进入目标修改 */}
               <button
                 onClick={() => setProfileModalOpen(true)}
                 className="w-full py-3.5 px-4 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 text-left flex justify-between items-center shadow-sm"
               >
-                <span>修改个人身材与热量预算</span>
+                <span>修改个人身材与基础热量</span>
                 <span className="text-slate-400">&gt;</span>
               </button>
 
@@ -198,7 +235,7 @@ export function App() {
           )}
         </main>
 
-        {/* 悬浮毛玻璃底栏 (iOS 16 Dock 样式) */}
+        {/* 悬浮毛玻璃底栏 */}
         <FloatingNavBar activeTab={activeTab} onSelectTab={setActiveTab} />
 
         {/* 添加食物弹窗 */}
@@ -216,6 +253,25 @@ export function App() {
           onAddAiFood={handleAddAiFoods}
         />
 
+        {/* ✨ AI 智能摄入/摄出量测算与计划弹窗 */}
+        <AiPlanModal
+          isOpen={aiPlanModalOpen}
+          profile={profile}
+          onClose={() => setAiPlanModalOpen(false)}
+          onApplyPlan={handleApplyAiPlan}
+        />
+
+        {/* 全月日历挑选弹窗 */}
+        <CalendarModal
+          isOpen={calendarModalOpen}
+          currentDate={currentDate}
+          onClose={() => setCalendarModalOpen(false)}
+          onSelectDate={(d) => {
+            setCurrentDate(d);
+            setActiveTab('home');
+          }}
+        />
+
         {/* 个人身材目标弹窗 */}
         <ProfileModal
           isOpen={profileModalOpen}
@@ -223,6 +279,7 @@ export function App() {
           onClose={() => setProfileModalOpen(false)}
           onUpdateProfile={(p) => setProfile(p)}
           onOpenBackup={() => setBackupModalOpen(true)}
+          onOpenAiPlan={() => setAiPlanModalOpen(true)}
         />
 
         {/* 数据备份与换机迁移弹窗 */}

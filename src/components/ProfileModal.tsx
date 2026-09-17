@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Save, Database, RotateCcw } from 'lucide-react';
+import { X, Save, Database, Sparkles } from 'lucide-react';
 import { UserProfile } from '../types/diet';
 import { saveUserProfile } from '../services/storageService';
 
@@ -9,6 +9,7 @@ interface ProfileModalProps {
   onClose: () => void;
   onUpdateProfile: (p: UserProfile) => void;
   onOpenBackup: () => void;
+  onOpenAiPlan?: () => void;
 }
 
 export const ProfileModal: React.FC<ProfileModalProps> = ({
@@ -17,16 +18,39 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   onClose,
   onUpdateProfile,
   onOpenBackup,
+  onOpenAiPlan,
 }) => {
   if (!isOpen) return null;
 
-  const [formData, setFormData] = useState<UserProfile>({ ...profile });
+  // 使用字符串状态，保证用户在退格删除时可以彻底清空，绝不会自动变成 0
+  const [nickname, setNickname] = useState(profile.nickname || '');
+  const [height, setHeight] = useState(profile.height ? String(profile.height) : '');
+  const [currentWeight, setCurrentWeight] = useState(profile.currentWeight ? String(profile.currentWeight) : '');
+  const [targetWeight, setTargetWeight] = useState(profile.targetWeight ? String(profile.targetWeight) : '');
+  const [dailyBudget, setDailyBudget] = useState(profile.dailyBudget ? String(profile.dailyBudget) : '');
+  const [targetProtein, setTargetProtein] = useState(profile.targetProtein ? String(profile.targetProtein) : '');
+  const [targetCarbs, setTargetCarbs] = useState(profile.targetCarbs ? String(profile.targetCarbs) : '');
+  const [targetFat, setTargetFat] = useState(profile.targetFat ? String(profile.targetFat) : '');
+
   const [savedTip, setSavedTip] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    saveUserProfile(formData);
-    onUpdateProfile(formData);
+
+    const updatedProfile: UserProfile = {
+      ...profile,
+      nickname: nickname.trim() || '自律小萌',
+      height: parseFloat(height) || 165,
+      currentWeight: parseFloat(currentWeight) || 60,
+      targetWeight: parseFloat(targetWeight) || 55,
+      dailyBudget: parseInt(dailyBudget) || 2000,
+      targetProtein: parseInt(targetProtein) || 120,
+      targetCarbs: parseInt(targetCarbs) || 200,
+      targetFat: parseInt(targetFat) || 60,
+    };
+
+    saveUserProfile(updatedProfile);
+    onUpdateProfile(updatedProfile);
     setSavedTip(true);
     setTimeout(() => {
       setSavedTip(false);
@@ -40,8 +64,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         {/* 顶部标题与关闭 */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <div>
-            <h3 className="text-base font-bold text-slate-900">个人减脂与热量目标设置</h3>
-            <p className="text-[11px] text-slate-400">调整身材指标，系统将自动重算热量缺口</p>
+            <h3 className="text-base font-bold text-slate-900">个人身材与目标设置</h3>
+            <p className="text-[11px] text-slate-400">设置您的基本身体指标与每日热量预算</p>
           </div>
           <button
             onClick={onClose}
@@ -51,20 +75,41 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           </button>
         </div>
 
+        {/* AI 智能测算入口横幅 */}
+        {onOpenAiPlan && (
+          <div className="my-3">
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenAiPlan();
+              }}
+              className="w-full p-3 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 text-white font-bold text-xs flex items-center justify-between shadow-md shadow-sky-500/20 active:scale-[0.99] transition-all"
+            >
+              <span className="flex items-center gap-1.5">
+                <Sparkles size={16} className="text-amber-300" />
+                <span>AI 智能计算每日摄入量与摄出量 (推荐)</span>
+              </span>
+              <span className="text-[11px] bg-white/20 px-2 py-0.5 rounded-full">去测算 &gt;</span>
+            </button>
+          </div>
+        )}
+
         {/* 备份中心入口 */}
-        <div className="my-4">
+        <div className="mb-4">
           <button
+            type="button"
             onClick={() => {
               onClose();
               onOpenBackup();
             }}
-            className="w-full py-3 px-4 rounded-2xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 font-bold text-xs flex items-center justify-between transition-colors shadow-sm"
+            className="w-full py-2.5 px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200/80 border border-slate-200/60 text-slate-700 font-semibold text-xs flex items-center justify-between transition-colors"
           >
             <span className="flex items-center gap-2">
-              <Database size={16} className="text-emerald-600" />
-              <span>数据备份与换机导出中心</span>
+              <Database size={14} className="text-emerald-600" />
+              <span>数据备份与换机迁移中心</span>
             </span>
-            <span className="text-[11px] text-emerald-600">点击进入 &gt;</span>
+            <span className="text-[11px] text-slate-400">导出/恢复 JSON &gt;</span>
           </button>
         </div>
 
@@ -76,9 +121,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               </label>
               <input
                 type="text"
-                value={formData.nickname}
-                onChange={(e) => setFormData({ ...formData, nickname: e.target.value })}
-                className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:bg-white"
+                placeholder="请输入昵称"
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:bg-white focus:border-blue-500"
               />
             </div>
             <div>
@@ -86,10 +132,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 身高 (cm)
               </label>
               <input
-                type="number"
-                value={formData.height}
-                onChange={(e) => setFormData({ ...formData, height: Number(e.target.value) })}
-                className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:bg-white"
+                type="text"
+                inputMode="decimal"
+                placeholder="例如 165"
+                value={height}
+                onChange={(e) => setHeight(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:bg-white focus:border-blue-500"
               />
             </div>
           </div>
@@ -100,11 +148,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 当前体重 (kg)
               </label>
               <input
-                type="number"
-                step="0.1"
-                value={formData.currentWeight}
-                onChange={(e) => setFormData({ ...formData, currentWeight: Number(e.target.value) })}
-                className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:bg-white"
+                type="text"
+                inputMode="decimal"
+                placeholder="例如 58"
+                value={currentWeight}
+                onChange={(e) => setCurrentWeight(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:bg-white focus:border-blue-500 font-bold text-slate-800"
               />
             </div>
             <div>
@@ -112,24 +161,27 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 目标体重 (kg)
               </label>
               <input
-                type="number"
-                step="0.1"
-                value={formData.targetWeight}
-                onChange={(e) => setFormData({ ...formData, targetWeight: Number(e.target.value) })}
-                className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:bg-white font-bold text-emerald-600"
+                type="text"
+                inputMode="decimal"
+                placeholder="例如 52"
+                value={targetWeight}
+                onChange={(e) => setTargetWeight(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:bg-white focus:border-emerald-500 font-bold text-emerald-600"
               />
             </div>
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              每日总热量预算 (千卡/kcal)
+              每日总摄入热量预算 (千卡/kcal)
             </label>
             <input
-              type="number"
-              value={formData.dailyBudget}
-              onChange={(e) => setFormData({ ...formData, dailyBudget: Number(e.target.value) })}
-              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-black text-blue-600 focus:bg-white"
+              type="text"
+              inputMode="numeric"
+              placeholder="例如 2000"
+              value={dailyBudget}
+              onChange={(e) => setDailyBudget(e.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-black text-blue-600 focus:bg-white focus:border-blue-500"
             />
           </div>
 
@@ -142,27 +194,33 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               <div>
                 <label className="block text-[11px] text-slate-400 mb-1">蛋白质(g)</label>
                 <input
-                  type="number"
-                  value={formData.targetProtein}
-                  onChange={(e) => setFormData({ ...formData, targetProtein: Number(e.target.value) })}
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="120"
+                  value={targetProtein}
+                  onChange={(e) => setTargetProtein(e.target.value)}
                   className="w-full px-2.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-center"
                 />
               </div>
               <div>
                 <label className="block text-[11px] text-slate-400 mb-1">碳水(g)</label>
                 <input
-                  type="number"
-                  value={formData.targetCarbs}
-                  onChange={(e) => setFormData({ ...formData, targetCarbs: Number(e.target.value) })}
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="200"
+                  value={targetCarbs}
+                  onChange={(e) => setTargetCarbs(e.target.value)}
                   className="w-full px-2.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-center"
                 />
               </div>
               <div>
                 <label className="block text-[11px] text-slate-400 mb-1">脂肪(g)</label>
                 <input
-                  type="number"
-                  value={formData.targetFat}
-                  onChange={(e) => setFormData({ ...formData, targetFat: Number(e.target.value) })}
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="60"
+                  value={targetFat}
+                  onChange={(e) => setTargetFat(e.target.value)}
                   className="w-full px-2.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-center"
                 />
               </div>
