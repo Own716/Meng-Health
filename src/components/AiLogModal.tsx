@@ -1,18 +1,20 @@
 import React, { useState } from 'react';
-import { X, Camera, Sparkles, Check, Loader2, ArrowRight } from 'lucide-react';
-import { identifyFood, AiFoodResult } from '../services/aiService';
+import { X, Camera, Sparkles, Check, Loader2, ArrowRight, Settings, Key } from 'lucide-react';
+import { identifyFood, AiFoodResult, getAiConfig } from '../services/aiService';
 import { FoodItem, MealType } from '../types/diet';
 
 interface AiLogModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAddAiFood: (mealType: MealType, foods: Omit<FoodItem, 'id'>[]) => void;
+  onOpenAiConfig?: () => void;
 }
 
 export const AiLogModal: React.FC<AiLogModalProps> = ({
   isOpen,
   onClose,
   onAddAiFood,
+  onOpenAiConfig,
 }) => {
   if (!isOpen) return null;
 
@@ -94,12 +96,25 @@ export const AiLogModal: React.FC<AiLogModalProps> = ({
               <p className="text-[11px] text-slate-400">大模型视觉识别 + 智能营养成分测算</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700"
-          >
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-1.5">
+            {onOpenAiConfig && (
+              <button
+                type="button"
+                onClick={onOpenAiConfig}
+                className="px-2.5 py-1.5 rounded-full bg-sky-50 hover:bg-sky-100 text-sky-700 text-xs font-bold flex items-center gap-1 transition-colors border border-sky-200"
+                title="AI 接口配置"
+              >
+                <Settings size={13} />
+                <span>AI配置</span>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {/* 模式一：拍照或选图 */}
@@ -159,7 +174,17 @@ export const AiLogModal: React.FC<AiLogModalProps> = ({
         {/* 错误提示横幅 */}
         {errorMessage && (
           <div className="mb-4 p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold leading-relaxed animate-shake">
-            ⚠️ {errorMessage}
+            <p>⚠️ {errorMessage}</p>
+            {onOpenAiConfig && (
+              <button
+                type="button"
+                onClick={onOpenAiConfig}
+                className="mt-2.5 px-3 py-1.5 rounded-xl bg-white border border-rose-200 hover:bg-rose-100/50 text-rose-800 text-[11px] font-bold flex items-center gap-1.5 shadow-sm"
+              >
+                <Settings size={13} className="text-rose-600" />
+                <span>点此一键检查/重新填写 AI API Key</span>
+              </button>
+            )}
           </div>
         )}
 
@@ -173,7 +198,7 @@ export const AiLogModal: React.FC<AiLogModalProps> = ({
             {loading ? (
               <>
                 <Loader2 size={18} className="animate-spin" />
-                <span>AI 正在分析营养成分中...</span>
+                <span>AI 正在智能识别分析中...</span>
               </>
             ) : (
               <>

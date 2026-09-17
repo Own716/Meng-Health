@@ -11,6 +11,7 @@ import { ProfileModal } from './components/ProfileModal';
 import { BackupModal } from './components/BackupModal';
 import { CalendarModal } from './components/CalendarModal';
 import { AiPlanModal } from './components/AiPlanModal';
+import { AiConfigModal } from './components/AiConfigModal';
 import { JournalView } from './components/JournalView';
 import { ProgressView } from './components/ProgressView';
 import { CheckCircle2 } from 'lucide-react';
@@ -49,6 +50,7 @@ export function App() {
   const [backupModalOpen, setBackupModalOpen] = useState(false);
   const [calendarModalOpen, setCalendarModalOpen] = useState(false);
   const [aiPlanModalOpen, setAiPlanModalOpen] = useState(false);
+  const [aiConfigModalOpen, setAiConfigModalOpen] = useState(false);
 
   // 当切换日期时，加载对应日期的记录
   useEffect(() => {
@@ -261,6 +263,15 @@ export function App() {
                 <span>去测算 &gt;</span>
               </button>
 
+              {/* AI 模型与 Key 配置入口 */}
+              <button
+                onClick={() => setAiConfigModalOpen(true)}
+                className="w-full py-3.5 px-4 rounded-2xl bg-sky-50 hover:bg-sky-100 border border-sky-200 text-xs font-bold text-sky-900 text-left flex justify-between items-center shadow-sm"
+              >
+                <span>🤖 AI 视觉大模型接口与 API Key 设置</span>
+                <span className="text-sky-600 font-bold">智谱/通义/Gemini &gt;</span>
+              </button>
+
               {/* 快捷进入目标修改 */}
               <button
                 onClick={() => setProfileModalOpen(true)}
@@ -298,6 +309,7 @@ export function App() {
           isOpen={aiModalOpen}
           onClose={() => setAiModalOpen(false)}
           onAddAiFood={handleAddAiFoods}
+          onOpenAiConfig={() => setAiConfigModalOpen(true)}
         />
 
         {/* ✨ AI 智能摄入/摄出量测算与计划弹窗 */}
@@ -327,6 +339,7 @@ export function App() {
           onUpdateProfile={handleUpdateProfile}
           onOpenBackup={() => setBackupModalOpen(true)}
           onOpenAiPlan={() => setAiPlanModalOpen(true)}
+          onOpenAiConfig={() => setAiConfigModalOpen(true)}
         />
 
         {/* 数据备份与换机迁移弹窗 */}
@@ -334,6 +347,14 @@ export function App() {
           isOpen={backupModalOpen}
           onClose={() => setBackupModalOpen(false)}
           onDataRestored={handleReloadAll}
+          onOpenAiConfig={() => setAiConfigModalOpen(true)}
+        />
+
+        {/* 🤖 AI 模型与 API Key 配置弹窗 */}
+        <AiConfigModal
+          isOpen={aiConfigModalOpen}
+          onClose={() => setAiConfigModalOpen(false)}
+          onConfigSaved={() => showToast('AI 接口配置已成功保存生效！')}
         />
       </div>
     </div>

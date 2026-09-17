@@ -7,12 +7,14 @@ interface BackupModalProps {
   isOpen: boolean;
   onClose: () => void;
   onDataRestored: () => void;
+  onOpenAiConfig?: () => void;
 }
 
 export const BackupModal: React.FC<BackupModalProps> = ({
   isOpen,
   onClose,
   onDataRestored,
+  onOpenAiConfig,
 }) => {
   if (!isOpen) return null;
 
@@ -148,10 +150,18 @@ export const BackupModal: React.FC<BackupModalProps> = ({
           📌 <strong>换机指南</strong>：换新手机前，点击“导出备份数据”把下载到的 JSON 文件发送到微信收藏或电脑；在换新手机安装好 Meng Health 后，点击“导入备份文件”选择该文件，即可一键完美恢复所有历史打卡与减脂档案！
         </div>
 
-        {/* AI 模型 API 接口管理 (折叠) */}
+        {/* AI 模型 API 接口管理 */}
         <div className="mt-5 pt-4 border-t border-slate-100">
           <button
-            onClick={() => setShowAiConfig(!showAiConfig)}
+            type="button"
+            onClick={() => {
+              if (onOpenAiConfig) {
+                onClose();
+                onOpenAiConfig();
+              } else {
+                setShowAiConfig(!showAiConfig);
+              }
+            }}
             className="w-full flex items-center justify-between text-xs font-bold text-slate-700 hover:text-slate-900 py-1"
           >
             <span className="flex items-center gap-1.5">
@@ -159,7 +169,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
               <span>AI 接口与 API Key 配置</span>
             </span>
             <span className="text-[11px] text-sky-600 font-medium">
-              {showAiConfig ? '收起' : '展开配置'}
+              {onOpenAiConfig ? '前往配置 &gt;' : (showAiConfig ? '收起' : '展开配置')}
             </span>
           </button>
 

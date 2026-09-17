@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Save, Database, Sparkles } from 'lucide-react';
+import { X, Save, Database, Sparkles, Key } from 'lucide-react';
 import { UserProfile } from '../types/diet';
 import { saveUserProfile } from '../services/storageService';
 
@@ -10,6 +10,7 @@ interface ProfileModalProps {
   onUpdateProfile: (p: UserProfile) => void;
   onOpenBackup: () => void;
   onOpenAiPlan?: () => void;
+  onOpenAiConfig?: () => void;
 }
 
 export const ProfileModal: React.FC<ProfileModalProps> = ({
@@ -19,6 +20,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   onUpdateProfile,
   onOpenBackup,
   onOpenAiPlan,
+  onOpenAiConfig,
 }) => {
   if (!isOpen) return null;
 
@@ -91,6 +93,26 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 <span>AI 智能计算每日摄入量与摄出量 (推荐)</span>
               </span>
               <span className="text-[11px] bg-white/20 px-2 py-0.5 rounded-full">去测算 &gt;</span>
+            </button>
+          </div>
+        )}
+
+        {/* AI 模型与 Key 配置入口 */}
+        {onOpenAiConfig && (
+          <div className="mb-2.5">
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenAiConfig();
+              }}
+              className="w-full py-2.5 px-3.5 rounded-xl bg-sky-50 hover:bg-sky-100 border border-sky-200/80 text-sky-800 font-semibold text-xs flex items-center justify-between transition-colors"
+            >
+              <span className="flex items-center gap-2">
+                <Key size={14} className="text-sky-600" />
+                <span>AI 大模型接口与 API Key 设置</span>
+              </span>
+              <span className="text-[11px] text-sky-600 font-bold">智谱/通义/Gemini &gt;</span>
             </button>
           </div>
         )}

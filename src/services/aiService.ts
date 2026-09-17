@@ -18,23 +18,83 @@ export interface AiConfig {
 
 const AI_CONFIG_KEY = 'meng_health_ai_config';
 
+// 默认采用国内智谱 GLM-4V-Flash 视觉大模型（永久免费、速度快）
+export const DEFAULT_AI_CONFIG: AiConfig = {
+  apiKey: '',
+  baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+  model: 'glm-4v-flash'
+};
+
 export function getAiConfig(): AiConfig {
   try {
     const raw = localStorage.getItem(AI_CONFIG_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        apiKey: parsed.apiKey || '',
+        baseUrl: parsed.baseUrl || DEFAULT_AI_CONFIG.baseUrl,
+        model: parsed.model || DEFAULT_AI_CONFIG.model
+      };
+    }
   } catch {}
-  return {
-    apiKey: '',
-    baseUrl: 'https://generativelanguage.googleapis.com',
-    model: 'gemini-1.5-flash'
-  };
+  return { ...DEFAULT_AI_CONFIG };
 }
 
 export function saveAiConfig(config: AiConfig): void {
-  localStorage.setItem(AI_CONFIG_KEY, JSON.stringify(config));
+  localStorage.setItem(AI_CONFIG_KEY, JSON.stringify({
+    apiKey: config.apiKey.trim(),
+    baseUrl: config.baseUrl.trim(),
+    model: config.model.trim()
+  }));
 }
 
-// 检查图片亮度与是否全黑/遮挡
+/**
+ * 前端 Canvas 图片等比例压缩与质量缩减
+ * 将动辄 5MB~10MB 的手机原图压缩到最长边 1024px、质量 0.75 (~100KB)
+ * 彻底解决手机上传大图导致的长时间卡顿、转圈与网络挂起问题
+ */
+export async function compressImageBase64(base64: string, maxDimension = 1024, quality = 0.75): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        let { width, height } = img;
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(base64);
+
+        // 填充白色背景（防止透明 PNG 变黑）
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const compressed = canvas.toDataURL('image/jpeg', quality);
+        resolve(compressed);
+      } catch (e) {
+        console.warn('图片压缩失败，使用原图数据:', e);
+        resolve(base64);
+      }
+    };
+    img.onerror = () => resolve(base64);
+    img.src = base64;
+  });
+}
+
+/**
+ * 检查图片感知亮度与是否全黑/镜头遮挡
+ */
 export async function checkImageBrightness(base64: string): Promise<number> {
   return new Promise((resolve) => {
     const img = new Image();
@@ -54,7 +114,7 @@ export async function checkImageBrightness(base64: string): Promise<number> {
           const r = data[i];
           const g = data[i + 1];
           const b = data[i + 2];
-          // 感知亮度公式
+          // 国际标准感知亮度公式
           const brightness = (r * 299 + g * 587 + b * 114) / 1000;
           totalBrightness += brightness;
         }
@@ -69,7 +129,83 @@ export async function checkImageBrightness(base64: string): Promise<number> {
 }
 
 /**
- * 识别食物：优先调用用户配置的真实 API；未配置时使用智能规则/演示算法
+ * 测试 AI API 配置连通性
+ */
+export async function testAiConnection(config: AiConfig): Promise<{ success: boolean; message: string }> {
+  if (!config.apiKey || config.apiKey.trim().length < 5) {
+    return { success: false, message: '请先填写有效的 API Key' };
+  }
+
+  const isGemini = config.baseUrl.includes('googleapis.com');
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    if (isGemini) {
+      const url = `${config.baseUrl.replace(/\/+$/, '')}/v1beta/models/${config.model.trim()}:generateContent?key=${config.apiKey.trim()}`;
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: 'Ping test' }] }]
+        }),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (!resp.ok) {
+        const errText = await resp.text();
+        return { success: false, message: `Google Gemini 接口响应错误 (${resp.status}): ${errText.slice(0, 100)}` };
+      }
+      return { success: true, message: 'Gemini 接口连接成功！' };
+    } else {
+      // 智谱/OpenAI 兼容协议
+      const endpoint = config.baseUrl.endsWith('/chat/completions')
+        ? config.baseUrl
+        : `${config.baseUrl.replace(/\/+$/, '')}/chat/completions`;
+
+      const resp = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.apiKey.trim()}`
+        },
+        body: JSON.stringify({
+          model: config.model.trim() || 'glm-4v-flash',
+          messages: [{ role: 'user', content: 'hi' }],
+          max_tokens: 5
+        }),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (!resp.ok) {
+        let detail = '';
+        try {
+          const errJson = await resp.json();
+          detail = errJson.error?.message || errJson.message || JSON.stringify(errJson);
+        } catch {
+          detail = await resp.text();
+        }
+
+        if (resp.status === 401) {
+          return { success: false, message: `认证失败 (401 Unauthorized)：API Key 不正确或已过期。详情: ${detail.slice(0, 80)}` };
+        }
+        return { success: false, message: `接口返回错误 (${resp.status}): ${detail.slice(0, 100)}` };
+      }
+
+      return { success: true, message: '🎉 AI 接口测试通过！API Key 认证成功，随时可以使用拍照识图！' };
+    }
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      return { success: false, message: '连接超时 (15秒)，请检查网络连接或 Base URL 是否可访问' };
+    }
+    return { success: false, message: `网络连接异常: ${err.message || '请检查网络'}` };
+  }
+}
+
+/**
+ * 识别食物核心方法：优先使用真实 AI API；未配置 Key 时使用智能演示/规则识别
  */
 export async function identifyFood(input: {
   imageFile?: File;
@@ -78,31 +214,35 @@ export async function identifyFood(input: {
 }): Promise<AiFoodResult[]> {
   const config = getAiConfig();
 
-  // 1. 如果提供了图片，先进行图像有效性与亮度检测
+  // 1. 如果有图片，先进行前端压缩与黑屏亮度检查
+  let processedImage: string | undefined = undefined;
   if (input.imageBase64) {
     const avgBrightness = await checkImageBrightness(input.imageBase64);
-    // 亮度低于 25 说明镜头被遮挡、黑屏或在极暗环境下拍摄
     if (avgBrightness < 25) {
       throw new Error('拍摄画面过暗或全黑，未检测到任何食物！请在光线充足的环境下对准饭菜重新拍照。');
     }
+    // 压缩图片
+    processedImage = await compressImageBase64(input.imageBase64, 1024, 0.75);
   }
 
-  // 2. 如果配置了真实 API Key，准备调用大模型
+  // 2. 如果配置了有效 API Key，发起真实大模型请求
   if (config.apiKey && config.apiKey.trim().length > 5) {
     try {
-      return await callRealAiApi(config, input);
+      return await callRealAiApi(config, {
+        imageBase64: processedImage,
+        textDescription: input.textDescription
+      });
     } catch (error: any) {
       console.warn('调用真实 AI API 出错:', error);
-      throw new Error(`AI 服务返回错误: ${error.message || '请检查 API Key 或网络'}`);
+      throw error;
     }
   }
 
-  // 3. 模拟 AI 处理网络耗时
-  await new Promise(r => setTimeout(r, 1200));
+  // 3. 未配置 API Key 时的备用规则引擎（体验模式）
+  await new Promise(r => setTimeout(r, 800));
 
   const desc = (input.textDescription || '').trim();
 
-  // 纯文本精准规则识别
   if (desc.includes('牛肉') || desc.includes('面')) {
     return [
       {
@@ -134,7 +274,7 @@ export async function identifyFood(input: {
   if (desc.includes('鸡蛋') || desc.includes('蛋')) {
     return [
       {
-        foodName: '水煮水光蛋',
+        foodName: '水煮鸡蛋 (1颗)',
         estimatedGrams: 60,
         calories: 86,
         protein: 7.5,
@@ -159,17 +299,31 @@ export async function identifyFood(input: {
     ];
   }
 
-  // 如果仅上传了图片但未输入文字，且处于免 Key 体验模式
-  if (input.imageBase64 && !desc) {
+  if (desc.includes('奶茶')) {
     return [
       {
-        foodName: '健康轻食混合餐 (杂粮+高蛋白肉类+时蔬)',
+        foodName: '现调奶茶 (中杯标准甜)',
+        estimatedGrams: 500,
+        calories: 360,
+        protein: 4,
+        carbs: 58,
+        fat: 12,
+        reasoning: '含糖饮品与奶基底，碳水及糖分较高，减脂期建议选择不另外加糖或鲜奶茶'
+      }
+    ];
+  }
+
+  // 如果仅上传了图片未配置 Key
+  if (processedImage && !desc) {
+    return [
+      {
+        foodName: '美味轻食组合餐',
         estimatedGrams: 350,
         calories: 420,
-        protein: 32,
-        carbs: 48,
-        fat: 10,
-        reasoning: '【模拟测试】已检测到食物光彩。后续在设置中填入您的专属 AI API Key 后，即可开启真实大模型逐物识别与精准称重！'
+        protein: 30,
+        carbs: 45,
+        fat: 12,
+        reasoning: '【体验模式】未配置 API Key 时自动启用估算。在设置中填入智谱 GLM-4V API Key 即可享受真实大模型视觉识别！'
       }
     ];
   }
@@ -191,10 +345,19 @@ export async function identifyFood(input: {
   throw new Error('未输入饮食描述或未检测到清晰餐品照片');
 }
 
-async function callRealAiApi(config: AiConfig, input: { imageBase64?: string; textDescription?: string }): Promise<AiFoodResult[]> {
-  const prompt = `你是一位专业临床营养师。请分析用户提供的食物图片或文本描述，估算各食物的克数、热量(千卡/kcal)、蛋白质(克)、碳水化合物(克)、脂肪(克)。
-如果图片不是食物，或者过于模糊黑屏，请返回空的 JSON 数组 []。
-必须以纯 JSON 数组格式返回，不要附带任何 markdown 标记，格式如下：
+/**
+ * 真实调用大模型（通用分发：智谱 / OpenAI 标准视觉协议 / Google Gemini）
+ */
+async function callRealAiApi(
+  config: AiConfig,
+  input: { imageBase64?: string; textDescription?: string }
+): Promise<AiFoodResult[]> {
+  const prompt = `你是一位严谨专业的人类临床营养学家和减脂教练。
+请仔细识别分析图片中的食物或文字描述，识别出所有的菜品/食材，估算各食物的：克数(g)、热量(千卡/kcal)、蛋白质(克)、碳水化合物(克)、脂肪(克)。
+要求：
+1. 如果图片中没有食物、画面完全不相干或无法分辨，请严格返回空数组 []。
+2. 必须以纯 JSON 数组格式输出，绝对不要添加任何 markdown 代码块标记（不要写 \`\`\`json 也不要写 \`\`\`），不要附带任何前置或后置说明文字。
+3. 返回格式示例：
 [
   {
     "foodName": "食物名称",
@@ -203,44 +366,181 @@ async function callRealAiApi(config: AiConfig, input: { imageBase64?: string; te
     "protein": 25,
     "carbs": 30,
     "fat": 8,
-    "reasoning": "简要营养分析"
+    "reasoning": "简要营养与热量分析"
   }
 ]
-用户描述: ${input.textDescription || '请识别图片中的饮食'}`;
+用户附加描述: ${input.textDescription || '请识别并估算图片中的食物营养'}`;
 
-  const url = `${config.baseUrl}/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`;
+  const isGemini = config.baseUrl.includes('googleapis.com');
+  const controller = new AbortController();
+  // 35 秒请求超时保护，防止无限期卡住转圈
+  const timeoutId = setTimeout(() => controller.abort(), 35000);
 
-  const contents: any[] = [];
-  const parts: any[] = [{ text: prompt }];
+  try {
+    let resultText = '';
 
-  if (input.imageBase64) {
-    const base64Data = input.imageBase64.replace(/^data:image\/\w+;base64,/, '');
-    parts.push({
-      inline_data: {
-        mime_type: 'image/jpeg',
-        data: base64Data
+    if (isGemini) {
+      // 1. Google Gemini 协议
+      const url = `${config.baseUrl.replace(/\/+$/, '')}/v1beta/models/${config.model.trim()}:generateContent?key=${config.apiKey.trim()}`;
+      const contents: any[] = [];
+      const parts: any[] = [{ text: prompt }];
+
+      if (input.imageBase64) {
+        const base64Data = input.imageBase64.replace(/^data:image\/\w+;base64,/, '');
+        parts.push({
+          inline_data: {
+            mime_type: 'image/jpeg',
+            data: base64Data
+          }
+        });
       }
-    });
+
+      contents.push({ parts });
+
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents }),
+        signal: controller.signal
+      });
+
+      if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error(`Gemini API 错误 (${resp.status}): ${errText.slice(0, 120)}`);
+      }
+
+      const json = await resp.json();
+      resultText = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    } else {
+      // 2. 智谱清言 (BigModel) / OpenAI 标准视觉兼容协议 (如 glm-4v-flash, qwen-vl-plus 等)
+      const endpoint = config.baseUrl.endsWith('/chat/completions')
+        ? config.baseUrl
+        : `${config.baseUrl.replace(/\/+$/, '')}/chat/completions`;
+
+      const messageContent: any[] = [];
+
+      if (input.imageBase64) {
+        const fullBase64 = input.imageBase64.startsWith('data:')
+          ? input.imageBase64
+          : `data:image/jpeg;base64,${input.imageBase64}`;
+
+        messageContent.push({
+          type: 'image_url',
+          image_url: {
+            url: fullBase64
+          }
+        });
+      }
+
+      messageContent.push({
+        type: 'text',
+        text: prompt
+      });
+
+      const resp = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.apiKey.trim()}`
+        },
+        body: JSON.stringify({
+          model: config.model.trim() || 'glm-4v-flash',
+          messages: [
+            {
+              role: 'user',
+              content: messageContent
+            }
+          ],
+          temperature: 0.1
+        }),
+        signal: controller.signal
+      });
+
+      if (!resp.ok) {
+        let errMsg = '';
+        try {
+          const errData = await resp.json();
+          errMsg = errData.error?.message || errData.message || JSON.stringify(errData);
+        } catch {
+          errMsg = await resp.text();
+        }
+
+        if (resp.status === 401) {
+          throw new Error('AI 认证失败 (401 Unauthorized)：API Key 无效。请在设置中检查填写的智谱 Key 是否正确无误，并注意不要复制多余空格。');
+        } else if (resp.status === 429) {
+          throw new Error('AI 调用受限 (429 Too Many Requests)：请求频率超限或账户配额不足。');
+        } else {
+          throw new Error(`AI 服务返回错误 (HTTP ${resp.status}): ${errMsg.slice(0, 150)}`);
+        }
+      }
+
+      const json = await resp.json();
+      resultText = json.choices?.[0]?.message?.content || '';
+    }
+
+    clearTimeout(timeoutId);
+
+    // 解析 JSON 结果（鲁棒提取）
+    return extractFoodResultsFromJson(resultText);
+
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      throw new Error('AI 分析请求超时 (35秒)。建议检查手机网络，或在设置中确认 API Key 正常有效。');
+    }
+    throw err;
+  }
+}
+
+/**
+ * 鲁棒提取与格式化 AI 返回的 JSON 数组
+ */
+function extractFoodResultsFromJson(rawText: string): AiFoodResult[] {
+  if (!rawText || !rawText.trim()) {
+    throw new Error('AI 未返回任何数据，请重试');
   }
 
-  contents.push({ parts });
+  const cleaned = rawText
+    .replace(/```json/gi, '')
+    .replace(/```/g, '')
+    .trim();
 
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contents })
-  });
+  let parsed: any = null;
 
-  if (!resp.ok) {
-    throw new Error(`AI API HTTP 错误: ${resp.status}`);
+  // 1. 优先直接解析
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    // 2. 正则提取 JSON 数组
+    const match = cleaned.match(/\[\s*\{[\s\S]*\}\s*\]/);
+    if (match) {
+      try {
+        parsed = JSON.parse(match[0]);
+      } catch {}
+    }
   }
 
-  const json = await resp.json();
-  const text = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  const cleaned = text.replace(/```json/g, '').replace(/```/g, '').trim();
-  const parsed = JSON.parse(cleaned);
-  if (!Array.isArray(parsed) || parsed.length === 0) {
-    throw new Error('未在照片中识别出有效食物，请对准真实饭菜重新拍摄。');
+  // 3. 正则提取单对象并封装成数组
+  if (!parsed) {
+    const singleMatch = cleaned.match(/\{\s*\"foodName\"[\s\S]*\}/);
+    if (singleMatch) {
+      try {
+        parsed = [JSON.parse(singleMatch[0])];
+      } catch {}
+    }
   }
-  return parsed;
+
+  if (!parsed || !Array.isArray(parsed) || parsed.length === 0) {
+    throw new Error('未在照片或描述中检测到有效食物，请重新拍摄清晰的食物照片。');
+  }
+
+  return parsed.map((item: any) => ({
+    foodName: String(item.foodName || '未知食物'),
+    estimatedGrams: Math.round(Number(item.estimatedGrams) || 100),
+    calories: Math.round(Number(item.calories) || 150),
+    protein: Math.round(Number(item.protein) || 5),
+    carbs: Math.round(Number(item.carbs) || 20),
+    fat: Math.round(Number(item.fat) || 5),
+    reasoning: String(item.reasoning || '')
+  }));
 }
