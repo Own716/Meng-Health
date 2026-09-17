@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Meng Health</string>
+    <string name="title_activity_main">Meng Health</string>
+    <string name="package_name">com.menghealth.app</string>
+    <string name="custom_url_scheme">com.menghealth.app</string>
+</resources>
