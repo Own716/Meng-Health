@@ -13,6 +13,7 @@ import { CalendarModal } from './components/CalendarModal';
 import { AiPlanModal } from './components/AiPlanModal';
 import { AiConfigModal } from './components/AiConfigModal';
 import { SettingsModal } from './components/SettingsModal';
+import { CalendarDeleteModal } from './components/CalendarDeleteModal';
 import { JournalView } from './components/JournalView';
 import { ProgressView } from './components/ProgressView';
 import { CheckCircle2, Settings, Sparkles, User, ChevronRight } from 'lucide-react';
@@ -53,6 +54,7 @@ export function App() {
   const [aiPlanModalOpen, setAiPlanModalOpen] = useState(false);
   const [aiConfigModalOpen, setAiConfigModalOpen] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [calendarDeleteModalOpen, setCalendarDeleteModalOpen] = useState(false);
 
   // 当切换日期时，加载对应日期的记录
   useEffect(() => {
@@ -395,7 +397,23 @@ export function App() {
             setSettingsModalOpen(false);
             setBackupModalOpen(true);
           }}
+          onOpenCalendarDelete={() => {
+            setSettingsModalOpen(false);
+            setCalendarDeleteModalOpen(true);
+          }}
           onClearCache={() => showToast('本地临时缓存已成功清理！')}
+        />
+
+        {/* 🗑️ 饮食与体重记录管理（日历批量删除） */}
+        <CalendarDeleteModal
+          isOpen={calendarDeleteModalOpen}
+          onClose={() => setCalendarDeleteModalOpen(false)}
+          onBatchDeleted={(deletedDates) => {
+            if (deletedDates.includes(currentDate)) {
+              setDayLog(getDayLog(currentDate));
+            }
+            showToast(`已彻底清空 ${deletedDates.length} 天的历史记录！`);
+          }}
         />
       </div>
     </div>

@@ -228,13 +228,29 @@ export const AUTHORITATIVE_CHINESE_FOODS: AuthoritativeFoodRecord[] = [
   // --- 常见包装乳品与饮品 (任务书重点指定) ---
   {
     name: '天润浓缩纯牛奶',
-    aliases: ['天润纯牛奶', '天润牛奶200g', '天润浓缩奶'],
+    aliases: ['天润纯牛奶', '天润牛奶200g', '天润浓缩奶', '天润牛奶'],
     brand: '天润',
     category: '乳品',
     standardServingGrams: 200,
-    per100g: { calories: 72, protein: 3.6, carbs: 5.0, fat: 4.2 },
-    source: '新疆天润浓缩纯牛奶200g利乐砖包装官方营养成分表',
+    per100g: { calories: 62, protein: 3.3, carbs: 4.8, fat: 3.5 },
+    source: '新疆天润浓缩纯牛奶200g利乐砖包装官方营养成分表 (200g整盒含124大卡, 蛋白质6.6g)',
     isPackaged: true
+  },
+  {
+    name: '白象老坛酸菜牛肉面',
+    aliases: ['白象方便面', '老坛酸菜牛肉面', '白象老坛酸菜牛肉面155g', '老坛酸菜牛肉面155g', '酸菜牛肉面', '白象酸菜牛肉面'],
+    brand: '白象',
+    category: '方便速食',
+    standardServingGrams: 155,
+    per100g: { calories: 420, protein: 8.5, carbs: 56.5, fat: 17.5 },
+    source: '白象老坛酸菜牛肉面全套包装官方标称 (全套总净含量155g = 面饼120g + 配料包35g，总热量651大卡)',
+    isPackaged: true,
+    foodDissection: {
+      dishName: '白象老坛酸菜牛肉面 (整份全套)',
+      mainIngredients: ['油炸面饼 120g (主体碳水与油脂)'],
+      seasoningsAndOil: ['老坛酸菜包+牛肉风味酱包+蔬菜包 共35g (含钠与风味油脂)'],
+      estimationMethod: '全套总净含量优先原则 (155g = 面饼120g + 配料35g)'
+    }
   },
   {
     name: '特仑苏纯牛奶',
@@ -392,6 +408,12 @@ export function queryAuthoritativeFood(queryText: string): AuthoritativeFoodReco
   }
   if (q.includes('肉夹馍') || q.includes('白吉馍')) {
     return AUTHORITATIVE_CHINESE_FOODS.find(f => f.name === '肉夹馍') || null;
+  }
+  if (q.includes('酸菜') && q.includes('面')) {
+    return AUTHORITATIVE_CHINESE_FOODS.find(f => f.name === '白象老坛酸菜牛肉面') || null;
+  }
+  if (q.includes('白象') && (q.includes('面') || q.includes('方便面'))) {
+    return AUTHORITATIVE_CHINESE_FOODS.find(f => f.name === '白象老坛酸菜牛肉面') || null;
   }
 
   // 3. 包含匹配

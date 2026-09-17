@@ -6,16 +6,16 @@ const LOGS_KEY = 'meng_health_day_logs';
 export const DEFAULT_PROFILE: UserProfile = {
   nickname: '梦梦',
   gender: 'female',
-  age: 25,
-  height: 165,
-  currentWeight: 58.5,
-  targetWeight: 52.0,
-  dailyBudget: 1750,
-  targetProtein: 105,
-  targetCarbs: 180,
-  targetFat: 50,
-  activityLevel: 'light',
-  durationDays: 60,
+  age: 21,
+  height: 166,
+  currentWeight: 69.0,
+  targetWeight: 50.0,
+  dailyBudget: 1462,
+  targetProtein: 124,
+  targetCarbs: 150,
+  targetFat: 41,
+  activityLevel: 'sedentary',
+  durationDays: 30,
   goalType: 'lose_weight',
 };
 
@@ -42,15 +42,16 @@ export function formatChineseDate(dateStr: string): { title: string; weekday: st
   };
 }
 
-// 初始化演示数据，完美匹配效果图展示
+// 初始化空日记记录，严格绑定用户当前激活计划的预算（杜绝周六 2200 硬编码）
 export function createDemoDayLog(dateStr: string): DayLog {
+  const profile = getUserProfile();
   return {
     date: dateStr,
-    budgetCalories: 2200,
-    consumedCalories: 1100, // 剩余 1100，或阶段目标 1650
-    targetProtein: 130,
-    targetCarbs: 240,
-    targetFat: 70,
+    budgetCalories: profile.dailyBudget,
+    consumedCalories: 0,
+    targetProtein: profile.targetProtein,
+    targetCarbs: profile.targetCarbs,
+    targetFat: profile.targetFat,
     meals: {
       breakfast: {
         type: 'breakfast',
@@ -152,11 +153,22 @@ export function getAllLogs(): Record<string, DayLog> {
 // 获取指定日期的记录
 export function getDayLog(dateStr: string): DayLog {
   const allLogs = getAllLogs();
-  if (allLogs[dateStr]) {
-    return allLogs[dateStr];
-  }
-  // 如果没有，自动新建一份干净的记录
   const profile = getUserProfile();
+
+  if (allLogs[dateStr]) {
+    const existing = allLogs[dateStr];
+    // 若当天尚未记录任何餐食且摄入为 0，确保预算指标与当前激活计划完全同步 (解决 1510 / 2200 冲突与远期日期回退缺陷)
+    const hasMeals = existing.meals && Object.values(existing.meals).some(m => m.items && m.items.length > 0);
+    if (!hasMeals && (!existing.consumedCalories || existing.consumedCalories === 0)) {
+      existing.budgetCalories = profile.dailyBudget;
+      existing.targetProtein = profile.targetProtein;
+      existing.targetCarbs = profile.targetCarbs;
+      existing.targetFat = profile.targetFat;
+    }
+    return existing;
+  }
+
+  // 如果没有，自动新建一份干净的记录，严格使用当前激活计划的数值
   const newLog: DayLog = {
     date: dateStr,
     budgetCalories: profile.dailyBudget,
@@ -173,6 +185,27 @@ export function getDayLog(dateStr: string): DayLog {
   };
   saveDayLog(newLog);
   return newLog;
+}
+
+// 检查某日是否包含真实的饮食或打卡记录 (用于日历状态打标与折线图空状态判定)
+export function hasLogRecords(log?: DayLog): boolean {
+  if (!log) return false;
+  if ((log.consumedCalories || 0) > 0) return true;
+  if (log.meals) {
+    for (const meal of Object.values(log.meals)) {
+      if (meal.items && meal.items.length > 0) return true;
+    }
+  }
+  return false;
+}
+
+// 批量删除指定日期的所有饮食日记与数据记录 (模块一：级联清空)
+export function batchDeleteDayLogs(dateStrings: string[]): void {
+  const allLogs = getAllLogs();
+  for (const dateStr of dateStrings) {
+    delete allLogs[dateStr];
+  }
+  localStorage.setItem(LOGS_KEY, JSON.stringify(allLogs));
 }
 
 // 保存某日记录
@@ -218,7 +251,7 @@ export function exportBackupData(): void {
   const profile = getUserProfile();
   const history = getAllLogs();
   const backup: BackupData = {
-    version: '1.5.0',
+    version: '1.6.0',
     exportTime: new Date().toISOString(),
     userProfile: profile,
     history

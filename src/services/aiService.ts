@@ -323,9 +323,13 @@ async function callRealAiApi(
   3. 西式汉堡：必须是由烘烤面包坯配牛肉饼/炸鸡排与沙拉酱。如果外层是蒸熟白馍，绝不能判断为汉堡！
 - 凡是发面馒头夹炒菜，一律识别为「馒头夹菜」，绝不输出为汉堡！
 
-【包装食品与 OCR 识别模式】：
-- 拍到食品包装、饮料瓶、奶盒、零食袋时，优先通过 OCR 读取：品牌名称、产品名称、净含量规格(g/ml)以及包装上的营养成分表(每100g能量kJ换算为大卡、蛋白质、脂肪、碳水化合物、钠)。
-- 必须统一使用“大卡”(kcal)为热量单位（1大卡 ≈ 4.184 kJ）。
+【包装食品净含量优先级与复合规格防呆原则（极其重要）】：
+- 包装食品（特别是方便面、酸辣粉、代餐奶昔、自热火锅等复合包装）：若包装同时标有“面饼/粉饼净含量”与“配料净含量/整套总净含量”（例如：面饼120克，配料35克，全套总净含量155克），必须以全套整份总净含量（155g）作为 estimatedGrams 计算整份全部热量与营养，严禁仅按面饼120g截断！
+- 包装食品与 OCR 识别模式：
+  1. 识别包装上的品牌名称与产品名称。
+  2. 优先提取包装营养成分表中的基准“每100g/ml”数值（能量/大卡、蛋白质、碳水化合物、脂肪），并在 JSON 中提供 per100g 字段；
+  3. 提取整套包装总净含量规格（或预估总摄入克数）作为 estimatedGrams。
+  4. 必须统一使用“大卡”(kcal)为热量单位（1大卡 ≈ 4.184 kJ）。
 
 【餐桌一桌多菜拆分】：
 - 若照片中包含多道菜品或主食（例如米饭、炒鸡蛋、红烧肉、青菜、汤），必须逐个拆分为独立的数组元素，每个菜独立给出克重、大卡、蛋白质、碳水和脂肪，严禁合并成一个笼统的“中式套餐”。
@@ -341,6 +345,7 @@ async function callRealAiApi(
 - 经典果茶饮品：蜜雪冰城冰鲜柠檬水(大杯)约 150-180大卡。
 
 【常见带包装零食净含量与热量参考】：
+- 包装方便面/速食面：整份全套净含量通常为 130g-155g（面饼约100-120g + 配料包约30-35g，整份约 550-650大卡），必须按全套总净重计算！
 - 包装薯片/膨化食品：标准中袋 70g (约 380-390大卡)，小袋 30g (约 160大卡)；
 - 辣条类（如卫龙）：标准包约 65g (约 240-280大卡)，小包约 30g；
 - 坚果/每日坚果：独立小袋装标准净含量通常为 25g (约 145-155大卡)；
@@ -353,15 +358,21 @@ async function callRealAiApi(
 3. 返回格式示例：
 [
   {
-    "foodName": "食物名称 (如: 馒头夹菜)",
-    "brand": "品牌 (如有)",
+    "foodName": "食物名称 (如: 白象老坛酸菜牛肉面)",
+    "brand": "品牌 (如: 白象)",
     "category": "分类",
-    "estimatedGrams": 200,
-    "calories": 345,
-    "protein": 11,
-    "carbs": 57,
-    "fat": 9,
-    "reasoning": "简要营养与热量分析"
+    "estimatedGrams": 155,
+    "per100g": {
+      "calories": 420,
+      "protein": 8.5,
+      "carbs": 56.5,
+      "fat": 17.5
+    },
+    "calories": 651,
+    "protein": 13.2,
+    "carbs": 87.6,
+    "fat": 27.1,
+    "reasoning": "全套总净含量155g(面饼120g+配料35g)，经每100g基准严密换算"
   }
 ]
 用户附加描述: ${input.textDescription || '请识别并估算图片中的食物营养'}`;
@@ -531,19 +542,30 @@ async function enrichFoodResults(rawText: string): Promise<AiFoodResult[]> {
   for (const item of parsed) {
     const rawName = String(item.foodName || '未知食物');
     const rawBrand = item.brand ? String(item.brand) : undefined;
-    const estimatedGrams = Math.max(1, Math.round(Number(item.estimatedGrams) || 100));
+    let estimatedGrams = Math.max(1, Math.round(Number(item.estimatedGrams) || 100));
 
     // 权威库交叉验证与基准对齐
     const authMatch = queryAuthoritativeFood(rawName);
+
+    // 复合规格防呆纠偏：若为白象老坛酸菜等方便面，若识别到的克重只有面饼重 (如 100~120g)，自动纠偏为全套总净重 155g
+    if (authMatch && authMatch.standardServingGrams > 0) {
+      if ((rawName.includes('方便面') || rawName.includes('酸菜牛肉面') || rawName.includes('白象')) && estimatedGrams < 140) {
+        estimatedGrams = authMatch.standardServingGrams; // 155g
+      }
+    }
+
+    // 提取基准 per100g 营养素（优先权威库，次选大模型 OCR 提取的标称 per100g）
+    const basePer100g = authMatch ? authMatch.per100g : (item.per100g && Number(item.per100g.calories) >= 0 ? item.per100g : null);
+
     let calories = Math.round(Number(item.calories) || 150);
     let protein = Math.round((Number(item.protein) || 5) * 10) / 10;
     let carbs = Math.round((Number(item.carbs) || 20) * 10) / 10;
     let fat = Math.round((Number(item.fat) || 5) * 10) / 10;
     let confidence: 'high' | 'medium' | 'low' = 'medium';
 
-    if (authMatch) {
-      // 若匹配到权威库，优先使用确定性程序比例运算
-      const scaled = scaleNutritionByGrams(authMatch.per100g, estimatedGrams);
+    if (basePer100g) {
+      // 确定性数学乘算换算（彻底解耦大模型计算幻觉，如牛奶 200g 严密推导 6.6g 蛋白与 124 kcal）
+      const scaled = scaleNutritionByGrams(basePer100g, estimatedGrams);
       calories = scaled.calories;
       protein = scaled.protein;
       carbs = scaled.carbs;
@@ -556,6 +578,13 @@ async function enrichFoodResults(rawText: string): Promise<AiFoodResult[]> {
     const verified = authMatch ? true : (Boolean(item.verified));
     const foodDissection = authMatch?.foodDissection || item.foodDissection;
 
+    let reasoning = String(item.reasoning || '');
+    if (basePer100g) {
+      reasoning = reasoning
+        ? `${reasoning} (依据标称每100g基准确定性乘算严密推导)`
+        : `依据每100g标称营养成分与${estimatedGrams}g净重由确定性数学公式严密乘算推导`;
+    }
+
     enrichedResults.push({
       foodName: authMatch ? authMatch.name : rawName,
       brand: rawBrand || authMatch?.brand,
@@ -565,7 +594,7 @@ async function enrichFoodResults(rawText: string): Promise<AiFoodResult[]> {
       protein,
       carbs,
       fat,
-      reasoning: String(item.reasoning || ''),
+      reasoning,
       evidence,
       confidence,
       verified,

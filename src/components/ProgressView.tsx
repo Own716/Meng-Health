@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { TrendingDown, Flame, Scale, Target, Sparkles, Activity, CheckCircle2, TrendingUp } from 'lucide-react';
+import { TrendingDown, Flame, Scale, Target, Sparkles, Activity, CheckCircle2, TrendingUp, Info } from 'lucide-react';
 import { UserProfile, DayLog } from '../types/diet';
 import { getAllLogs, getDayLog, getTodayString } from '../services/storageService';
+import { calculateDietPlan } from '../services/calorieCalculator';
 
 interface ProgressViewProps {
   profile: UserProfile;
@@ -10,15 +11,22 @@ interface ProgressViewProps {
 export const ProgressView: React.FC<ProgressViewProps> = ({ profile }) => {
   const [chartType, setChartType] = useState<'calories' | 'weight'>('calories');
 
-  // Mifflin-St Jeor 基础代谢计算
-  const age = profile.age || 25;
-  const bmr = Math.round(
-    10 * profile.currentWeight + 6.25 * profile.height - 5 * age + (profile.gender === 'male' ? 5 : -161)
-  );
-  const tdee = Math.round(bmr * 1.375);
-  const toLose = (profile.currentWeight - profile.targetWeight).toFixed(1);
+  // 统一调用核心代谢算法引擎，与个人设置及 AI 测算计划保持 100% 同步
+  const dietPlan = calculateDietPlan({
+    currentWeight: profile.currentWeight,
+    targetWeight: profile.targetWeight,
+    height: profile.height,
+    age: profile.age || 21,
+    gender: profile.gender || 'female',
+    activityLevel: profile.activityLevel || 'sedentary',
+    durationDays: profile.durationDays || 30,
+  });
 
-  // 获取最近 7 天的记录数据
+  const bmr = dietPlan.bmr;
+  const tdee = dietPlan.tdee;
+  const toLose = Math.max(0, profile.currentWeight - profile.targetWeight).toFixed(1);
+
+  // 获取最近 7 天的日期序列
   const generateLast7Days = () => {
     const dates: string[] = [];
     const today = new Date();
@@ -36,32 +44,40 @@ export const ProgressView: React.FC<ProgressViewProps> = ({ profile }) => {
   const last7DateStrings = generateLast7Days();
   const allLogs = getAllLogs();
 
-  // 整理 7 天的热量数据
+  // 整理 7 天的热量数据（彻底清除 0.88 假数据注入，仅取用户真实打卡）
   const calorieTrend = last7DateStrings.map((dateStr, idx) => {
-    const log: DayLog = allLogs[dateStr] || getDayLog(dateStr);
+    const log: DayLog | undefined = allLogs[dateStr];
     const dateObj = new Date(dateStr);
     const label = idx === 6 ? '今天' : `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
+    const hasRealRecord = Boolean(log && (log.consumedCalories || 0) > 0);
+    const consumed = hasRealRecord ? (log?.consumedCalories || 0) : 0;
     return {
       dateStr,
       label,
-      consumed: log.consumedCalories || (idx === 6 ? log.consumedCalories : Math.round(profile.dailyBudget * 0.88)),
-      budget: log.budgetCalories || profile.dailyBudget,
+      hasRealRecord,
+      consumed,
+      budget: log?.budgetCalories || profile.dailyBudget,
     };
   });
 
-  // 整理 7 天的体重推演走势
+  // 整理 7 天的真实体重走势（彻底清除 0.12 伪造递减走势）
   const weightTrend = last7DateStrings.map((dateStr, idx) => {
-    const diff = (6 - idx) * 0.12;
-    const w = Number((profile.currentWeight + diff).toFixed(1));
     const dateObj = new Date(dateStr);
     const label = idx === 6 ? '今天' : `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
     return {
       dateStr,
       label,
-      weight: w,
+      weight: profile.currentWeight,
       target: profile.targetWeight,
     };
   });
+
+  // 严格基于「有真实记录的天数」计算日均摄入与达标天数
+  const recordedDays = calorieTrend.filter(d => d.hasRealRecord);
+  const avgConsumed = recordedDays.length > 0
+    ? Math.round(recordedDays.reduce((acc, cur) => acc + cur.consumed, 0) / recordedDays.length)
+    : 0;
+  const successDays = recordedDays.filter(c => c.consumed <= c.budget).length;
 
   // SVG 折线图尺寸与坐标映射
   const svgWidth = 320;
@@ -70,26 +86,31 @@ export const ProgressView: React.FC<ProgressViewProps> = ({ profile }) => {
   const padY = 24;
 
   // 热量坐标
-  const maxCal = Math.max(...calorieTrend.map(d => Math.max(d.consumed, d.budget)), 2500);
-  const minCal = Math.max(0, Math.min(...calorieTrend.map(d => d.consumed)) - 400);
+  const maxCal = Math.max(...calorieTrend.map(d => Math.max(d.consumed, d.budget)), 2000);
+  const minCal = 0;
 
   const calPoints = calorieTrend.map((d, i) => {
     const x = padX + (i * (svgWidth - padX * 2)) / 6;
     const normY = (d.consumed - minCal) / ((maxCal - minCal) || 1);
     const y = svgHeight - padY - normY * (svgHeight - padY * 2);
-    return { x, y, val: d.consumed, label: d.label, budget: d.budget };
+    return { x, y, val: d.consumed, label: d.label, budget: d.budget, hasRealRecord: d.hasRealRecord };
   });
 
-  const calLinePath = calPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-  const calAreaPath = `${calLinePath} L ${calPoints[calPoints.length - 1].x} ${svgHeight - padY} L ${calPoints[0].x} ${svgHeight - padY} Z`;
+  const activeCalPoints = calPoints.filter(p => p.hasRealRecord);
+  const calLinePath = activeCalPoints.length > 1
+    ? activeCalPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
+    : '';
+  const calAreaPath = activeCalPoints.length > 1
+    ? `${calLinePath} L ${activeCalPoints[activeCalPoints.length - 1].x} ${svgHeight - padY} L ${activeCalPoints[0].x} ${svgHeight - padY} Z`
+    : '';
 
   // 目标预算基准线高度
   const targetNormY = (profile.dailyBudget - minCal) / ((maxCal - minCal) || 1);
   const targetLineY = Math.max(padY, Math.min(svgHeight - padY, svgHeight - padY - targetNormY * (svgHeight - padY * 2)));
 
   // 体重坐标
-  const maxW = Math.max(...weightTrend.map(d => d.weight)) + 0.5;
-  const minW = Math.min(...weightTrend.map(d => d.weight)) - 0.5;
+  const minW = Math.min(profile.targetWeight, profile.currentWeight) - 2;
+  const maxW = Math.max(profile.targetWeight, profile.currentWeight) + 2;
 
   const weightPoints = weightTrend.map((d, i) => {
     const x = padX + (i * (svgWidth - padX * 2)) / 6;
@@ -98,12 +119,11 @@ export const ProgressView: React.FC<ProgressViewProps> = ({ profile }) => {
     return { x, y, val: d.weight, label: d.label };
   });
 
+  const targetWeightNormY = (profile.targetWeight - minW) / ((maxW - minW) || 1);
+  const targetWeightLineY = Math.max(padY, Math.min(svgHeight - padY, svgHeight - padY - targetWeightNormY * (svgHeight - padY * 2)));
+
   const weightLinePath = weightPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
   const weightAreaPath = `${weightLinePath} L ${weightPoints[weightPoints.length - 1].x} ${svgHeight - padY} L ${weightPoints[0].x} ${svgHeight - padY} Z`;
-
-  // 计算 7 天均值
-  const avgConsumed = Math.round(calorieTrend.reduce((acc, cur) => acc + cur.consumed, 0) / 7);
-  const successDays = calorieTrend.filter(c => c.consumed <= c.budget).length;
 
   return (
     <div className="px-5 pb-28 pt-2 select-none animate-fadeIn space-y-4">
@@ -249,40 +269,67 @@ export const ProgressView: React.FC<ProgressViewProps> = ({ profile }) => {
                   上限 {profile.dailyBudget}
                 </text>
 
-                {/* 面积填充 */}
-                <path d={calAreaPath} fill="url(#calAreaGrad)" />
+                {/* 仅在有2天及以上真实打卡时填充面积与主折线 */}
+                {activeCalPoints.length > 1 && (
+                  <>
+                    <path d={calAreaPath} fill="url(#calAreaGrad)" />
+                    <path
+                      d={calLinePath}
+                      fill="none"
+                      stroke="#0284c7"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </>
+                )}
 
-                {/* 主折线 */}
-                <path
-                  d={calLinePath}
-                  fill="none"
-                  stroke="#0284c7"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
+                {/* 近7天完全无打卡时的空状态提示 */}
+                {activeCalPoints.length === 0 && (
+                  <text
+                    x={svgWidth / 2}
+                    y={svgHeight / 2}
+                    textAnchor="middle"
+                    fontSize="11"
+                    fill="#94a3b8"
+                    fontWeight="500"
+                  >
+                    近 7 天暂无打卡记录，记录今日饮食即可生成趋势图
+                  </text>
+                )}
 
-                {/* 数据圆点与数值标注 */}
+                {/* 数据圆点与日期标注 */}
                 {calPoints.map((p, idx) => (
                   <g key={idx}>
-                    <circle
-                      cx={p.x}
-                      cy={p.y}
-                      r="4.5"
-                      fill="#ffffff"
-                      stroke="#0284c7"
-                      strokeWidth="2.5"
-                    />
-                    <text
-                      x={p.x}
-                      y={p.y - 7}
-                      textAnchor="middle"
-                      fontSize="9"
-                      fill="#1e293b"
-                      fontWeight="bold"
-                    >
-                      {p.val}
-                    </text>
+                    {p.hasRealRecord ? (
+                      <>
+                        <circle
+                          cx={p.x}
+                          cy={p.y}
+                          r="4.5"
+                          fill="#ffffff"
+                          stroke="#0284c7"
+                          strokeWidth="2.5"
+                        />
+                        <text
+                          x={p.x}
+                          y={p.y - 7}
+                          textAnchor="middle"
+                          fontSize="9"
+                          fill="#1e293b"
+                          fontWeight="bold"
+                        >
+                          {p.val}
+                        </text>
+                      </>
+                    ) : (
+                      <circle
+                        cx={p.x}
+                        cy={svgHeight - padY}
+                        r="2.5"
+                        fill="#cbd5e1"
+                      />
+                    )}
                     <text
                       x={p.x}
                       y={svgHeight - padY + 14}
@@ -298,7 +345,28 @@ export const ProgressView: React.FC<ProgressViewProps> = ({ profile }) => {
               </>
             ) : (
               <>
-                {/* 体重折线图 */}
+                {/* 目标体重基准虚线 */}
+                <line
+                  x1={padX}
+                  y1={targetWeightLineY}
+                  x2={svgWidth - padX}
+                  y2={targetWeightLineY}
+                  stroke="#10b981"
+                  strokeWidth="1"
+                  strokeDasharray="4 3"
+                />
+                <text
+                  x={svgWidth - padX - 4}
+                  y={targetWeightLineY - 4}
+                  textAnchor="end"
+                  fontSize="9"
+                  fill="#059669"
+                  fontWeight="600"
+                >
+                  目标 {profile.targetWeight} kg
+                </text>
+
+                {/* 体重真实基准线 */}
                 <path d={weightAreaPath} fill="url(#weightAreaGrad)" />
                 <path
                   d={weightLinePath}
@@ -343,6 +411,18 @@ export const ProgressView: React.FC<ProgressViewProps> = ({ profile }) => {
               </>
             )}
           </svg>
+        </div>
+
+        {/* 底部纯真实数据说明提示 */}
+        <div className="flex items-center gap-1.5 px-1 pt-2 border-t border-slate-100 text-[11px] text-slate-400">
+          <Info size={12} className="text-slate-400 flex-shrink-0" />
+          <span>
+            {chartType === 'calories'
+              ? (recordedDays.length > 0
+                  ? `已基于近 7 天内的 ${recordedDays.length} 天真实饮食打卡数据精确绘制，未捏造任何填充数据。`
+                  : '近 7 天暂无饮食打卡记录，可在首页或通过 AI 拍照速记添加饮食。')
+              : `已基于当前体重 (${profile.currentWeight} kg) 锁定基准线，在设置中更新体重将记录升降变化。`}
+          </span>
         </div>
       </div>
 

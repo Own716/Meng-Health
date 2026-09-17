@@ -56,8 +56,11 @@ export function calculateDietPlan(input: CaloriePlanInput): CaloriePlanResult {
   dailyDeficit = Math.min(650, Math.max(250, dailyDeficit));
 
   // 4. 建议每日安全热量摄入 (Intake)
-  // 摄入量不能低于基础代谢 BMR 太远，防止肌肉流失与代谢受损
+  // 严格执行基础代谢保护底线 (BMR Floor)：摄入量绝对不能低于 BMR，防止肌肉流失与代谢受损
   const safeIntake = Math.max(bmr, tdee - dailyDeficit);
+
+  // 实际生效缺口：严格由 TDEE - safeIntake 动态推导 (消除触碰 BMR Floor 时的文案与数值矛盾)
+  const actualDeficit = Math.max(0, tdee - safeIntake);
 
   // 5. 三大宏量营养素科学分配 (推荐中国居民减脂期高蛋白适度碳水比例)
   // 蛋白质：体重 × 1.6~1.8g (每克产生4大卡)
@@ -72,13 +75,13 @@ export function calculateDietPlan(input: CaloriePlanInput): CaloriePlanResult {
   const carbsCal = Math.max(0, safeIntake - proteinCal - fatCal);
   const carbsGrams = Math.round(carbsCal / 4);
 
-  const weeklyPaceKg = Math.round(((dailyDeficit * 7) / 7700) * 100) / 100;
+  const weeklyPaceKg = Math.round(((actualDeficit * 7) / 7700) * 100) / 100;
 
   return {
     bmr,
     tdee,
     safeIntake,
-    dailyDeficit,
+    dailyDeficit: actualDeficit,
     weightToLose: Math.round(weightToLose * 10) / 10,
     proteinGrams,
     carbsGrams,

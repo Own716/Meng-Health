@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Save, Sparkles, Check } from 'lucide-react';
 import { UserProfile } from '../types/diet';
 import { saveUserProfile } from '../services/storageService';
+import { calculateDietPlan } from '../services/calorieCalculator';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -41,21 +42,26 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     }
   }, [isOpen, profile]);
 
-  // 科学推导推荐摄入量 (Mifflin-St Jeor 基础代谢 + TDEE 轻活动 - 500kcal 减脂缺口)
+  // 统一调用核心算法引擎 (calculateDietPlan)，与 AI 测算页完全保持一致，严守 BMR Floor 底线
   const calcHeight = parseFloat(height) || 165;
   const calcWeight = parseFloat(currentWeight) || 58;
   const calcTarget = parseFloat(targetWeight) || 52;
   const calcAge = parseInt(age) || 25;
 
-  const bmr = Math.round(
-    10 * calcWeight + 6.25 * calcHeight - 5 * calcAge + (gender === 'male' ? 5 : -161)
-  );
-  const tdee = Math.round(bmr * 1.375);
-  // 减脂期建议每日摄入量
-  const autoDailyBudget = Math.max(1200, tdee - 500);
-  const autoProtein = Math.round(calcWeight * 1.8);
-  const autoFat = Math.round((autoDailyBudget * 0.25) / 9);
-  const autoCarbs = Math.round((autoDailyBudget - autoProtein * 4 - autoFat * 9) / 4);
+  const plan = calculateDietPlan({
+    currentWeight: calcWeight,
+    targetWeight: calcTarget,
+    height: calcHeight,
+    age: calcAge,
+    gender,
+    activityLevel: profile.activityLevel || 'light',
+    durationDays: profile.durationDays || 60,
+  });
+
+  const autoDailyBudget = plan.safeIntake;
+  const autoProtein = plan.proteinGrams;
+  const autoCarbs = plan.carbsGrams;
+  const autoFat = plan.fatGrams;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

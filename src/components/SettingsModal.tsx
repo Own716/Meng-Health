@@ -4,6 +4,7 @@ import {
   Settings,
   Key,
   Database,
+  Calendar,
   Bell,
   AlertTriangle,
   Trash2,
@@ -19,6 +20,7 @@ interface SettingsModalProps {
   onClose: () => void;
   onOpenAiConfig: () => void;
   onOpenBackup: () => void;
+  onOpenCalendarDelete?: () => void;
   onClearCache?: () => void;
 }
 
@@ -27,6 +29,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   onOpenAiConfig,
   onOpenBackup,
+  onOpenCalendarDelete,
   onClearCache,
 }) => {
   if (!isOpen) return null;
@@ -118,6 +121,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
             <ChevronRight size={18} className="text-slate-300 group-hover:text-emerald-600 transition-colors" />
           </div>
+
+          {/* 饮食与打卡记录管理入口 */}
+          <div
+            onClick={() => {
+              onClose();
+              if (onOpenCalendarDelete) onOpenCalendarDelete();
+            }}
+            className="p-3.5 rounded-2xl bg-slate-50 hover:bg-rose-50/70 border border-slate-200/70 transition-all cursor-pointer flex items-center justify-between group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center">
+                <Calendar size={18} />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-slate-800 group-hover:text-rose-700">
+                  饮食与体重记录管理
+                </div>
+                <div className="text-[11px] text-slate-400 mt-0.5">
+                  按日历按天批量删除饮食日记与体重打卡数据
+                </div>
+              </div>
+            </div>
+            <ChevronRight size={18} className="text-slate-300 group-hover:text-rose-600 transition-colors" />
+          </div>
         </div>
 
         {/* 设置分组 2：日常饮食偏好与提醒 */}
@@ -144,8 +171,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 }`}
               >
                 <div
-                  className={`w-5 h-5 rounded-full bg-white shadow-sm absolute top-0.5 transition-transform ${
-                    mealReminder ? 'left-5.5' : 'left-0.5'
+                  className={`w-5 h-5 rounded-full bg-white shadow-sm absolute top-0.5 left-0.5 transform transition-transform duration-200 ${
+                    mealReminder ? 'translate-x-5' : 'translate-x-0'
                   }`}
                 />
               </button>
@@ -170,8 +197,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 }`}
               >
                 <div
-                  className={`w-5 h-5 rounded-full bg-white shadow-sm absolute top-0.5 transition-transform ${
-                    waterReminder ? 'left-5.5' : 'left-0.5'
+                  className={`w-5 h-5 rounded-full bg-white shadow-sm absolute top-0.5 left-0.5 transform transition-transform duration-200 ${
+                    waterReminder ? 'translate-x-5' : 'translate-x-0'
                   }`}
                 />
               </button>
@@ -196,8 +223,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 }`}
               >
                 <div
-                  className={`w-5 h-5 rounded-full bg-white shadow-sm absolute top-0.5 transition-transform ${
-                    calorieWarning ? 'left-5.5' : 'left-0.5'
+                  className={`w-5 h-5 rounded-full bg-white shadow-sm absolute top-0.5 left-0.5 transform transition-transform duration-200 ${
+                    calorieWarning ? 'translate-x-5' : 'translate-x-0'
                   }`}
                 />
               </button>
@@ -243,7 +270,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <span>关于 Meng Health · 梦健康</span>
             </span>
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-200/70 text-blue-800 font-bold">
-              v1.5.0 正式版
+              v1.6.0 正式版
             </span>
           </div>
 
